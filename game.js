@@ -1032,7 +1032,7 @@ function init() {
                 if (confirm("정말로 서버의 모든 랭킹 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
                     const deleteServerRankings = async () => {
                         try {
-                            const snapshot = await db.collection("leaderboard").get();
+                            const snapshot = await db.collection("leaderboard_ydp").get();
                             if (snapshot.empty) {
                                 alert("삭제할 기록이 없습니다.");
                                 return;
@@ -3512,7 +3512,7 @@ async function updateRankUI() {
     if(rankListEl) rankListEl.innerHTML = '<div style="text-align:center; padding:10px; color:#2ecc71;">Loading ranking...</div>';
     let board = [];
     try {
-        const querySnapshot = await db.collection("leaderboard").get();
+        const querySnapshot = await db.collection("leaderboard_ydp").get();
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             // Ensure necessary fields exist to avoid crashes
@@ -3682,7 +3682,7 @@ if (submitRankBtn) {
         }
 
         try {
-            await db.collection("leaderboard").doc(nickname).set({
+            await db.collection("leaderboard_ydp").doc(nickname).set({
                 nickname: nickname,
                 levelScores: Object.assign({}, myLevelBestScores),
                 overallScore: calculateMyOverallScore(),
