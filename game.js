@@ -601,6 +601,13 @@ let level11WindMultiplier = 1;
 let windCycleStartTime = 0;
 let lastParticleUpdate = 0; // 파티클 애니메이션 FPS 캡
 let particleAccumulator = 0; // 추가: 파티클 연산 보정을 위한 누적 시간
+let totalItemsAtStart = 0; // 미션 시작 시점의 총 아이템 개수
+
+function getUpgradeTotalCount() {
+    let inventoryCount = (upgrades.clock || 0) + (upgrades.fan_left || 0) + (upgrades.fan_right || 0) + (upgrades.gas_item || 0) + (upgrades.weight || 0);
+    let onScreenCount = (droppedItems || []).length;
+    return inventoryCount + onScreenCount;
+}
 
 // Initialize
 function init() {
@@ -1139,6 +1146,7 @@ function startGame() {
     gas = currentMaxGas;
     elapsedTime = 0;
     sessionItemsUsed = 0;
+    totalItemsAtStart = getUpgradeTotalCount();
     missionStartTime = Date.now();
     windCycleStartTime = missionStartTime;
     playRandomBGM();
@@ -2287,20 +2295,32 @@ function winGame() {
     let itemBonus = 0;
     const displayName = LEVEL_CONFIGS[currentLevel].displayName;
     
-    const max1ItemLevels = ["6", "7", "14", "15"];
-    const max2ItemLevels = ["8", "9", "10", "16", "17", "18", "19", "20", "EVENT 3"];
+    const groupALevels = ["6", "7", "14", "15"];
+    const groupBLevels = ["8", "9", "10", "16", "17", "18", "19", "20"];
     
     let allowedItems = 0;
-    if (max1ItemLevels.includes(displayName)) {
+    if (groupALevels.includes(displayName)) {
         allowedItems = 1;
-    } else if (max2ItemLevels.includes(displayName)) {
+    } else if (groupBLevels.includes(displayName)) {
         allowedItems = 2;
     }
 
     if (allowedItems > 0) {
-        let savedItemsCount = allowedItems - sessionItemsUsed;
-        if (savedItemsCount > 0) {
-            itemBonus = savedItemsCount * 200; 
+        let currentTotal = getUpgradeTotalCount();
+        let itemsUsedActual = Math.max(0, totalItemsAtStart - currentTotal);
+        
+        if (groupALevels.includes(displayName)) {
+            // 6, 7, 14, 15: 0개 줄면 200점, 1개 줄면 0점
+            if (itemsUsedActual === 0) itemBonus = 200;
+            else itemBonus = 0;
+        } else if (groupBLevels.includes(displayName)) {
+            // 8, 9, 10, 16, 17, 18, 19, 20: 0개 줄면 400점, 1개 줄면 200점, 2개 줄면 0점
+            if (itemsUsedActual === 0) itemBonus = 400;
+            else if (itemsUsedActual === 1) itemBonus = 200;
+            else itemBonus = 0;
+        }
+
+        if (itemBonus > 0) {
             // Show bonus text
             setTimeout(() => {
                 showFloatingText(`+${itemBonus} (ITEM BONUS)`, "#2ecc71");
