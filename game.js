@@ -2107,12 +2107,13 @@ function collectCoin(coin) {
 
 function getMarkerOffset() {
     const skyHeight = gameContainer.clientHeight * 0.9195;
-    return (73 / skyHeight) * 100; // 79 -> 73 (약 6px 내림)
+    return (79 / skyHeight) * 100; // 79px from balloon bottom
 }
 
 function getBasketOffset() {
     const skyHeight = gameContainer.clientHeight * 0.9195;
-    return (45 / skyHeight) * 100; // 51.2 -> 45 (약 6px 내림)
+    const basketPixels = (140 * 0.58) - 30; // 51.2px from balloon bottom
+    return (basketPixels / skyHeight) * 100;
 }
 
 function checkBoundaries() {
@@ -3522,10 +3523,11 @@ function checkBirdCollisions() {
 
     activeBirds.forEach(bird => {
         const birdXPx = (bird.x / 100) * skyWidth;
-        const birdYPx = (bird.y / 100) * skyHeight;
+        // Bird collision point is roughly at its center (height is 18px)
+        const birdYPx = (bird.y / 100) * skyHeight + 9;
         
         // Bird Hitbox (approximate circle for the body/head area)
-        const birdRadius = 6;  // 10 -> 6 (더 정밀한 판정)        
+        const birdRadius = 6;  // 더 정밀한 판정
         // Body-Bird Collision (Circumference check)
         const dxBody = bodyXPx - birdXPx;
         const dyBody = bodyYPx - birdYPx;

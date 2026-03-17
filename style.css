@@ -1007,7 +1007,7 @@ body {
 
 #balloon-marker {
     position: absolute;
-    top: 67px; /* 61px -> 67px로 내려서 실제 판정(73px from bottom)과 일치시킴 */
+    top: calc(35% + 12px);
     left: 50%;
     transform: translate(-50%, -50%);
     width: 32.5px;
@@ -1026,7 +1026,7 @@ body {
 
 #basket-marker {
     position: absolute;
-    bottom: 45px; /* 51.2px -> 45px로 내려서 실제 판정(45px from bottom)과 일치시킴 */
+    bottom: calc(58% - 30px);
     /* 바구니 최하단 위치 */
     left: 50%;
     transform: translateX(-50%);
