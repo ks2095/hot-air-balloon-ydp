@@ -139,6 +139,29 @@ let lastLifeUpdate = parseInt(localStorage.getItem('balloon_last_life_update')) 
 let clearedLevels = JSON.parse(localStorage.getItem('balloon_cleared_levels')) || [];
 let myLevelBestScores = JSON.parse(localStorage.getItem('balloon_level_best_scores')) || {};
 let currentLevel = parseInt(localStorage.getItem('balloon_current_level')) || 0;
+let lastEventCreditTime = parseInt(localStorage.getItem('balloon_last_event_credit_time')) || 0;
+
+function shouldAllowEventCredits() {
+    const isAlreadyCleared = clearedLevels.includes(currentLevel);
+    // 아직 클리어하지 않은 레벨은 항상 크레딧 지급
+    if (!isAlreadyCleared) return true;
+    
+    // 이미 클리어한 레벨의 경우:
+    // 생명이 1이 남고 크레딧이 100 미만인 절박한 상황에서만 30분 간격으로 점수 획득 가능
+    const now = Date.now();
+    const thirtyMinutes = 30 * 60 * 1000;
+    
+    if (lives === 1 && totalCredits < 100) {
+        return (now - lastEventCreditTime > thirtyMinutes);
+    }
+    
+    return false;
+}
+
+function recordEventCreditGain() {
+    lastEventCreditTime = Date.now();
+    savePlayerData();
+}
 
 function saveLevelBestScore(scoreEarned) {
     if (scoreEarned <= 0) return;
@@ -205,10 +228,6 @@ if (!storeData.items.life) {
     savePlayerData();
 }
 
-function canReceiveEventPoints() {
-    const hasNoItems = (upgrades.clock === 0 && upgrades.fan_left === 0 && upgrades.fan_right === 0 && upgrades.gas_item === 0 && upgrades.weight === 0);
-    return (lives <= 1 && hasNoItems && totalCredits <= 99);
-}
 
 function savePlayerData() {
     localStorage.setItem('balloon_credits', totalCredits);
@@ -219,6 +238,7 @@ function savePlayerData() {
     localStorage.setItem('balloon_last_life_update', lastLifeUpdate);
     localStorage.setItem('balloon_music_enabled', isMusicEnabled);
     localStorage.setItem('balloon_current_level', currentLevel);
+    localStorage.setItem('balloon_last_event_credit_time', lastEventCreditTime);
 
     // Update ground credit display
     const groundCredits = document.getElementById('ground-credits-display');
@@ -339,7 +359,9 @@ async function preloadSounds() {
         { name: 'explosion', url: '폭발.MP3' },
         { name: 'coin', url: '코인소리.mp3' },
         { name: 'life', url: '생명소리.MP3' },
-        { name: 'popcorn', url: '팝콘소리.MP3' }
+        { name: 'popcorn', url: '팝콘소리.MP3' },
+        { name: 'hit', url: '히트.MP3' },
+        { name: 'bird_hit', url: '새충돌소리.MP3' }
     ];
     // Parallel decode-into-memory
     await Promise.all(effects.map(effect => soundMgr.loadSound(effect.name, effect.url)));
@@ -378,6 +400,7 @@ const MAX_TIME = 60;
 let particles = [];
 const PARTICLE_COUNT = 30;
 let activeFish = [];
+let activeBirds = []; // Level 21 birds
 let attachedFish = null;
 let draggingOffset = { x: 0, y: 0 };
 
@@ -552,10 +575,18 @@ const LEVEL_CONFIGS = {
     },
     24: {
         displayName: "EVENT 4",
-        winds: [1, -1, -2, 2, -2, 2, -1],
+        winds: [-2.5, 2.5, -2.5, 2.5, -2.5, 2.5, -2.5],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.5
+    },
+    25: {
+        displayName: "21",
+        winds: [1.5, -1.5, 1.5, -1.5, 1.5, -1.5, 1.5],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
 
@@ -601,12 +632,23 @@ let level11WindMultiplier = 1;
 let windCycleStartTime = 0;
 let lastParticleUpdate = 0; // 파티클 애니메이션 FPS 캡
 let particleAccumulator = 0; // 추가: 파티클 연산 보정을 위한 누적 시간
-let totalItemsAtStart = 0; // 미션 시작 시점의 총 아이템 개수
+let initialItemCount = 0; // 게임 시작 직전 보유한 아이템 총 갯수
+let isStunned = false; // 붉은새 충돌 시 상태
+let stunEndTime = 0; // 스턴 종료 시간
 
-function getUpgradeTotalCount() {
-    let inventoryCount = (upgrades.clock || 0) + (upgrades.fan_left || 0) + (upgrades.fan_right || 0) + (upgrades.gas_item || 0) + (upgrades.weight || 0);
-    let onScreenCount = (droppedItems || []).length;
-    return inventoryCount + onScreenCount;
+// 보너스 점수 레벨 그룹 (표시 이름 기준)
+const BONUS_G1_LEVELS = ["6", "7", "14", "15"];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20"];
+
+function getTotalItemsCount() {
+    let total = 0;
+    for (let key in upgrades) {
+        if (key !== 'life') {
+            total += (upgrades[key] || 0);
+        }
+    }
+    total += droppedItems.length;
+    return total;
 }
 
 // Initialize
@@ -1039,7 +1081,7 @@ function init() {
                 if (confirm("정말로 서버의 모든 랭킹 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
                     const deleteServerRankings = async () => {
                         try {
-                            const snapshot = await db.collection("leaderboard_ydp").get();
+                            const snapshot = await db.collection("leaderboard").get();
                             if (snapshot.empty) {
                                 alert("삭제할 기록이 없습니다.");
                                 return;
@@ -1146,7 +1188,7 @@ function startGame() {
     gas = currentMaxGas;
     elapsedTime = 0;
     sessionItemsUsed = 0;
-    totalItemsAtStart = getUpgradeTotalCount();
+    initialItemCount = getTotalItemsCount();
     missionStartTime = Date.now();
     windCycleStartTime = missionStartTime;
     playRandomBGM();
@@ -1230,7 +1272,7 @@ function startDragPlacement(key, initialEvent) {
 
             placeItemOnScreen(key, dropX, gameY);
             upgrades[key]--;
-            sessionItemsUsed++;
+            // sessionItemsUsed++; // 구 버전 로직용 변수, 새 로직에선 직접 개수 비교하므로 주석 처리하거나 맞춰줌
             savePlayerData();
             updateStoreUI(true);
             if (showWindLabels) updateWindLabels();
@@ -1452,19 +1494,17 @@ function updateStoreUI(isInventoryMode = false) {
             const itemDiv = document.createElement('div');
             itemDiv.className = `store-mini-item item-${key}`;
             if (isInventoryMode) {
-                const max1ItemLevels = ["6", "7", "14", "15"];
-                const max2ItemLevels = ["8", "9", "10", "16", "17", "18", "19", "20", "EVENT 3"];
-                const allItemLevels = [...max1ItemLevels, ...max2ItemLevels];
+                const allItemLevels = [...BONUS_G1_LEVELS, ...BONUS_G2_LEVELS];
                 let isItemDisabled = (count === 0);
 
                 // 아이템 미션이 없는 레벨이라면 비활성화
                 if (!allItemLevels.includes(displayName)) {
                     isItemDisabled = true;
-                } else if (max1ItemLevels.includes(displayName)) {
+                } else if (BONUS_G1_LEVELS.includes(displayName)) {
                     if (droppedItems.length >= 1) {
                         isItemDisabled = true;
                     }
-                } else if (max2ItemLevels.includes(displayName)) {
+                } else if (BONUS_G2_LEVELS.includes(displayName)) {
                     if (droppedItems.length >= 2) {
                         isItemDisabled = true;
                     }
@@ -1543,12 +1583,9 @@ function updateStoreUI(isInventoryMode = false) {
                 itemDiv.addEventListener('mousedown', (e) => {
                     const displayName = LEVEL_CONFIGS[currentLevel].displayName;
 
-                    const max1ItemLevels = ["6", "7", "14", "15"];
-                    const max2ItemLevels = ["8", "9", "10", "16", "17", "18", "19", "20", "EVENT 3"];
-
-                    if (max1ItemLevels.includes(displayName)) {
+                    if (BONUS_G1_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 1) return;
-                    } else if (max2ItemLevels.includes(displayName)) {
+                    } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
                     } else {
                         // 아이템 미션이 없는 레벨
@@ -1562,12 +1599,9 @@ function updateStoreUI(isInventoryMode = false) {
                 itemDiv.addEventListener('touchstart', (e) => {
                     const displayName = LEVEL_CONFIGS[currentLevel].displayName;
 
-                    const max1ItemLevels = ["6", "7", "14", "15"];
-                    const max2ItemLevels = ["8", "9", "10", "16", "17", "18", "19", "20", "EVENT 3"];
-
-                    if (max1ItemLevels.includes(displayName)) {
+                    if (BONUS_G1_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 1) return;
-                    } else if (max2ItemLevels.includes(displayName)) {
+                    } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
                     } else {
                         // 아이템 미션이 없는 레벨
@@ -1717,8 +1751,10 @@ function update(timestamp) {
             updateSteakCooking();
             updateCornPopping();
             checkFishing();
+            checkBirdCollisions();
         }
         updateFish();
+        updateBirds();
         accumulator -= targetDelta;
     }
 
@@ -1800,9 +1836,15 @@ function update(timestamp) {
 
 
 function updateTargetLine() {
-    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~24레벨 공통)
-    if (currentLevel >= 0 && currentLevel <= 24) {
-        targetLineX = 50;
+    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~25레벨 공통)
+    if (currentLevel >= 0 && currentLevel <= 25) {
+        if (currentLevel === 25) {
+            // 레벨 21 (인덱스 25): 좌측으로 1m/s 속도로 이동 (가중치 0.2 적용 시 -0.2)
+            targetLineX -= 0.2;
+            if (targetLineX < 0) targetLineX = 100;
+        } else {
+            targetLineX = 50;
+        }
         targetLineEl.style.left = `${targetLineX}%`;
 
         // 레벨별 플랫폼 높이 반영 (비주얼)
@@ -1811,7 +1853,8 @@ function updateTargetLine() {
         const targetYBottom = (100 / 7) * platformY;
         let pixelOffset = 12;
         if (config.displayName === "9") pixelOffset = 7;
-        if (config.displayName === "10") pixelOffset = -3; // Raised by 20px from -23
+        if (config.displayName === "10") pixelOffset = -3; 
+        if (config.displayName === "19") pixelOffset = 2; // Lowered by 10px from 12
         targetLineEl.style.bottom = `calc(8.05% + ${targetYBottom * 0.9195}% + ${pixelOffset}px)`;
 
         // EVENT 레벨들에서 착륙 패드 숨기기
@@ -1853,13 +1896,25 @@ function handleMovement() {
     } else {
         continuousBurnStartTime = 0;
     }
+
     velY -= GRAVITY * activeGravityMultiplier;
     velY *= FRICTION;
 
     // Limit upward speed
     if (velY > MAX_UPWARD_VELOCITY) velY = MAX_UPWARD_VELOCITY;
 
-    balloonY += velY * 0.2; // Scaling factor for smoothness
+    let movementScale = 0.2;
+    if (isStunned) {
+        if (Date.now() < stunEndTime) {
+            movementScale *= 0.5; // 속도 50% 감소
+            balloon.classList.add('shake-balloon');
+        } else {
+            isStunned = false;
+            balloon.classList.remove('shake-balloon');
+        }
+    }
+
+    balloonY += velY * movementScale; // Scaling factor for smoothness
 
     // Horizontal logic (Wind triggered by the center marker dot)
     const skyHeight = gameContainer.clientHeight * 0.9195;
@@ -1877,7 +1932,10 @@ function handleMovement() {
     velX += windForce * 0.00165; // Reduced from 0.0033 (half of previous effect)
     velX *= FRICTION;
 
-    balloonX += velX;
+    let finalVelX = velX;
+    if (isStunned) finalVelX *= 0.5; // 가로 속도도 50% 감소
+
+    balloonX += finalVelX;
 
     // Platform Dimensions
     const platformHeightPercentage = (9 / skyHeight) * 100;
@@ -1886,7 +1944,7 @@ function handleMovement() {
     let pixelOffset = 12;
     if (config.displayName === "9") pixelOffset = 7;
     if (config.displayName === "10") pixelOffset = -3;
-    if (config.displayName === "19") pixelOffset = 12 - 20; // 20px down
+    if (config.displayName === "19") pixelOffset = 2; // Lowered by 10px from 12
     if (config.displayName === "EVENT 2" || config.displayName === "EVENT 3" || config.displayName === "EVENT 4") pixelOffset = 12 - 50; // 50px down
     const targetYBottom = (100 / 7) * platformY + (pixelOffset / skyHeight) * 100; // Visual bottom of the platform
     const targetYTop = targetYBottom + platformHeightPercentage; // Top of the grass
@@ -2031,9 +2089,9 @@ function collectCoin(coin) {
     if (eventCreditsValEl) eventCreditsValEl.innerText = sessionEventCredits;
 
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
-    if (!isAlreadyCleared || canReceiveEventPoints()) {
+    if (shouldAllowEventCredits()) {
         totalCredits += 10;
-        savePlayerData();
+        recordEventCreditGain();
         if (totalCreditsEl) totalCreditsEl.innerText = totalCredits;
         console.log("Credits added:", totalCredits);
     } else {
@@ -2049,14 +2107,12 @@ function collectCoin(coin) {
 
 function getMarkerOffset() {
     const skyHeight = gameContainer.clientHeight * 0.9195;
-    return (79 / skyHeight) * 100;
+    return (73 / skyHeight) * 100; // 79 -> 73 (약 6px 내림)
 }
 
 function getBasketOffset() {
     const skyHeight = gameContainer.clientHeight * 0.9195;
-    // Calculate based on style.css: bottom: calc(58% - 30px) of 140px height
-    const basketPixels = (140 * 0.58) - 30;
-    return (basketPixels / skyHeight) * 100;
+    return (45 / skyHeight) * 100; // 51.2 -> 45 (약 6px 내림)
 }
 
 function checkBoundaries() {
@@ -2069,13 +2125,25 @@ function checkBoundaries() {
         velY = 0;
     }
 
+    const config = LEVEL_CONFIGS[currentLevel];
+    const isEventLevel = config && config.displayName.startsWith("EVENT");
+
     if (balloonX < 5) {
         balloonX = 5;
-        gameOver('CRASH');
+        if (!isEventLevel) gameOver('CRASH');
     }
     if (balloonX > 95) {
         balloonX = 95;
-        gameOver('CRASH');
+        if (!isEventLevel) gameOver('CRASH');
+    }
+
+    // EVENT 4: 낚싯대 자동 반전 (벽에 닿을 때)
+    if (config.displayName === "EVENT 4" && fishingGearEl) {
+        if (balloonX < 15) {
+            fishingGearEl.classList.remove('flipped');
+        } else if (balloonX > 85) {
+            fishingGearEl.classList.add('flipped');
+        }
     }
 
     // Top boundary check
@@ -2096,6 +2164,23 @@ function clearDroppedItems() {
 
 function gameOver(msg = 'OVERHEAT') {
     if (gameState !== 'PLAY') return;
+
+    const config = LEVEL_CONFIGS[currentLevel];
+    const isEventLevel = config && config.displayName.startsWith("EVENT");
+
+    if (isEventLevel) {
+        // 이벤트 레벨에서는 터져도 클리어로 간주 (상태를 즉시 CLEAR로 변경하여 이동 중지)
+        gameState = 'CLEAR';
+        balloon.classList.add('explosion');
+        gameContainer.classList.add('shake');
+        soundMgr.play('explosion');
+        
+        setTimeout(() => {
+            winGame();
+        }, 500);
+        return;
+    }
+
     gameState = 'GAMEOVER';
     isBurning = false;
     soundMgr.stop('burner');
@@ -2110,8 +2195,6 @@ function gameOver(msg = 'OVERHEAT') {
         if (windCountdownEl) windCountdownEl.classList.add('hidden');
     }
 
-    const config = LEVEL_CONFIGS[currentLevel];
-    const isEventLevel = config && config.displayName.startsWith("EVENT");
     const isEvent2 = config && config.displayName === "EVENT 2";
 
     if (isEvent2) {
@@ -2120,8 +2203,9 @@ function gameOver(msg = 'OVERHEAT') {
         const earnedScore = displayCookedPct * 10;
         const isAlreadyCleared = clearedLevels.includes(currentLevel);
         if (earnedScore > 0) {
-            if (!isAlreadyCleared || canReceiveEventPoints()) {
+            if (shouldAllowEventCredits()) {
                 totalCredits += earnedScore;
+                recordEventCreditGain();
                 console.log(`EVENT 2 Failed: Added ${earnedScore}C from cooking.`);
             }
         }
@@ -2293,39 +2377,32 @@ function winGame() {
     const score = Math.floor(gas) + Math.floor(timeLeft * 10) + landingBonus;
 
     let itemBonus = 0;
-    const displayName = LEVEL_CONFIGS[currentLevel].displayName;
-    
-    const groupALevels = ["6", "7", "14", "15"];
-    const groupBLevels = ["8", "9", "10", "16", "17", "18", "19", "20"];
-    
-    let allowedItems = 0;
-    if (groupALevels.includes(displayName)) {
-        allowedItems = 1;
-    } else if (groupBLevels.includes(displayName)) {
-        allowedItems = 2;
+    const currentItemCount = getTotalItemsCount();
+    const actualItemsDecreased = Math.max(0, initialItemCount - currentItemCount);
+
+    if (BONUS_G1_LEVELS.includes(currentDisplayName)) {
+        // Group 1: 0개 줄면 200점, 1개 이상 줄면 0점
+        if (actualItemsDecreased === 0) {
+            itemBonus = 200;
+        } else {
+            itemBonus = 0;
+        }
+    } else if (BONUS_G2_LEVELS.includes(currentDisplayName)) {
+        // Group 2: 0개 줄면 400점, 1개 줄면 200점, 2개 이상 줄면 0점
+        if (actualItemsDecreased === 0) {
+            itemBonus = 400;
+        } else if (actualItemsDecreased === 1) {
+            itemBonus = 200;
+        } else {
+            itemBonus = 0;
+        }
     }
 
-    if (allowedItems > 0) {
-        let currentTotal = getUpgradeTotalCount();
-        let itemsUsedActual = Math.max(0, totalItemsAtStart - currentTotal);
-        
-        if (groupALevels.includes(displayName)) {
-            // 6, 7, 14, 15: 0개 줄면 200점, 1개 줄면 0점
-            if (itemsUsedActual === 0) itemBonus = 200;
-            else itemBonus = 0;
-        } else if (groupBLevels.includes(displayName)) {
-            // 8, 9, 10, 16, 17, 18, 19, 20: 0개 줄면 400점, 1개 줄면 200점, 2개 줄면 0점
-            if (itemsUsedActual === 0) itemBonus = 400;
-            else if (itemsUsedActual === 1) itemBonus = 200;
-            else itemBonus = 0;
-        }
-
-        if (itemBonus > 0) {
-            // Show bonus text
-            setTimeout(() => {
-                showFloatingText(`+${itemBonus} (ITEM BONUS)`, "#2ecc71");
-            }, 500);
-        }
+    if (itemBonus > 0) {
+        // Show bonus text
+        setTimeout(() => {
+            showFloatingText(`+${itemBonus} (ITEM BONUS)`, "#2ecc71");
+        }, 500);
     }
 
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
@@ -2352,12 +2429,15 @@ function winGame() {
     let scoreForRank = isSteakEvent ? (displayCookedPct * 10) : (score + itemBonus);
 
     if (isEventLevel) {
-        if (!isAlreadyCleared || canReceiveEventPoints()) {
+        if (shouldAllowEventCredits()) {
             if (isSteakEvent) {
                 finalScore = (displayCookedPct * 10);
             } else {
-                finalScore = score;
+                // EVENT 1, 3, 4는 플레이 중 이미 크레딧을 실시간 획득하므로
+                // 클리어(가스/시간) 보너스를 0으로 설정하여 중복 지급을 방지합니다.
+                finalScore = 0;
             }
+            if (finalScore > 0) recordEventCreditGain();
         } else {
             finalScore = 0;
         }
@@ -2408,11 +2488,22 @@ function winGame() {
     // currentDisplayName already defined above
     if (clearTitleEl) clearTitleEl.innerText = currentDisplayName.startsWith("EVENT") ? "EVENT LEVEL CLEAR!" : `LEVEL-${currentDisplayName} CLEAR`;
 
-    if (currentDisplayName.startsWith("EVENT") && !isSteakEvent) {
-        console.log("Event Level Cleared: Score stored quietly.");
+    if (currentDisplayName.startsWith("EVENT")) {
+        if (clearScreen) clearScreen.classList.add('hidden');
+        if (eventClearScreen) {
+            // 이벤트 전용 데이터는 업데이트하되 창은 띄우지 않음
+            if (eventResultScoreEl) {
+                let eventScore = 0;
+                if (currentDisplayName === "EVENT 1" || currentDisplayName === "EVENT 3") eventScore = sessionEventCredits;
+                else if (currentDisplayName === "EVENT 4") eventScore = event4FishCaughtScore;
+                eventResultScoreEl.innerText = eventScore;
+            }
+            if (eventAccumulatedTotalEl) eventAccumulatedTotalEl.innerText = totalCredits;
+            eventClearScreen.classList.add('hidden'); 
+        }
     } else {
-        if (eventClearScreen) eventClearScreen.classList.add('hidden'); // 이벤트 결과창과 겹침 방지
-        clearScreen.classList.remove('hidden'); // 클리어 여부 상관없이 점수판 노출
+        if (eventClearScreen) eventClearScreen.classList.add('hidden');
+        clearScreen.classList.remove('hidden'); // 일반 레벨만 점수판 노출
     }
 
     updateNextLevelButtonVisibility();
@@ -2561,6 +2652,13 @@ function createStars() {
 function resetGame() {
     gameState = 'START';
     const config = LEVEL_CONFIGS[currentLevel];
+    
+    // Apply level-specific sky color if defined
+    if (config.skyColor) {
+        gameContainer.style.background = config.skyColor;
+    } else {
+        gameContainer.style.background = ''; // Use CSS default
+    }
 
     // Sync winds with config
     for (let i = 0; i < 7; i++) {
@@ -2707,7 +2805,10 @@ function resetGame() {
     // EVENT 4: 바다 표현 및 낚싯대 추가
     if (config.displayName === "EVENT 4") {
         if (seaOverlayEl) seaOverlayEl.classList.remove('hidden');
-        if (fishingGearEl) fishingGearEl.classList.remove('hidden');
+        if (fishingGearEl) {
+            fishingGearEl.classList.remove('hidden');
+            fishingGearEl.classList.remove('flipped');
+        }
         if (event4FloatingScore) {
             event4FloatingScore.classList.remove('hidden');
             if (event4FishScore) event4FishScore.innerText = "0";
@@ -2719,6 +2820,14 @@ function resetGame() {
         if (fishingGearEl) fishingGearEl.classList.add('hidden');
         clearFish();
     }
+
+    // Level 21: Bird Obstacles
+    if (currentLevel === 25) {
+        createBirds();
+    } else {
+        clearBirds();
+    }
+
     attachedFish = null;
 
     // Clear accumulated popcorn
@@ -2728,13 +2837,12 @@ function resetGame() {
     if (levelHintEl) {
         levelHintEl.classList.remove('level-8-hint');
         const displayName = config.displayName;
-        if (displayName === "6" || displayName === "7" || displayName === "14" || displayName === "15") {
+        if (BONUS_G1_LEVELS.includes(displayName)) {
             levelHintEl.innerHTML = `Use 1 item or less`;
             levelHintEl.classList.remove('hidden');
-        } else if (displayName === "8" || displayName === "9" || displayName === "10" || displayName === "16" || displayName === "17" || displayName === "18" || displayName === "19" || displayName === "20" || displayName === "EVENT 3") {
-            levelHintEl.innerHTML = (displayName === "EVENT 3") ? `Use 2 items` : `Use 2 items or less`;
+        } else if (BONUS_G2_LEVELS.includes(displayName)) {
+            levelHintEl.innerHTML = `Use 2 items or less`;
             levelHintEl.classList.remove('hidden');
-            // Removed level-8-hint class addition as positioning is now fixed
         } else {
             levelHintEl.classList.add('hidden');
         }
@@ -3016,8 +3124,9 @@ function depositPopcornCredits() {
     // Add credits to session and total
     sessionEventCredits += popcornGatheredScore;
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
-    if (!isAlreadyCleared || canReceiveEventPoints()) {
+    if (shouldAllowEventCredits()) {
         totalCredits += popcornGatheredScore;
+        recordEventCreditGain();
     }
 
     // Update UI
@@ -3103,7 +3212,7 @@ function createFish() {
             gameContainer.appendChild(fishEl);
 
             const fishHeightPct = (fishSize / (gameContainer.clientHeight * 0.9195)) * 100;
-            const maxSurface = (100 / 7) * 2.5; // 3구역 중간 (약 35.7%)
+            const maxSurface = (100 / 7) * 2.8; // 3구역 80% 지점 (약 40%)
             const maxBodyY = maxSurface - fishHeightPct;
 
             const fish = {
@@ -3138,7 +3247,7 @@ function updateFish() {
                 const bob = Math.sin(now * 0.0015 + fish.swimOffset) * 1.5; 
                 currentY = fish.baseY + bob;
                 
-                const maxSurface = (100 / 7) * 2.5;
+                const maxSurface = (100 / 7) * 2.8;
                 const maxBodyY = maxSurface - fish.heightPct;
                 currentY = Math.max(0, Math.min(maxBodyY, currentY));
                 
@@ -3164,7 +3273,7 @@ function updateFish() {
                 currentY = fish.y;
 
                 // 일반 물고기도 낚인 상태에서 수면 위로 못 올라오게 제한
-                const maxSurface = (100 / 7) * 2.5;
+                const maxSurface = (100 / 7) * 2.8;
                 const maxBodyY = maxSurface - fish.heightPct;
                 currentY = Math.max(0, Math.min(maxBodyY, currentY));
 
@@ -3180,8 +3289,8 @@ function updateFish() {
             const bob = Math.sin(now * 0.0015 + fish.swimOffset) * 1.5; 
             currentY = fish.baseY + bob;
             
-            // 수면 높이 제한 적용 (물고기 머리가 3구역 중간을 넘지 않게)
-            const maxSurface = (100 / 7) * 2.5;
+            // 수면 높이 제한 적용 (물고기 머리가 3구역 80% 지점을 넘지 않게)
+            const maxSurface = (100 / 7) * 2.8;
             const maxBodyY = maxSurface - (fish.heightPct || 0);
             currentY = Math.max(0, Math.min(maxBodyY, currentY));
             flip = fish.velX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
@@ -3204,12 +3313,20 @@ function checkFishing() {
     const baitRect = baitEl.getBoundingClientRect();
 
     if (attachedFish) {
-        if (attachedFish.type === 1) return; // 물고기1은 안 잡힘
+        if (attachedFish.type === 1) {
+            // 물고기1은 5초 동안만 끌고 다님
+            if (Date.now() - attachedFish.attachTime > 5000) {
+                attachedFish.lastReleaseTime = Date.now();
+                attachedFish = null;
+                return;
+            }
+            return; 
+        }
 
         if (isBurning && continuousBurnStartTime !== 0) {
-            let catchThreshold = 500; // 기본 (물고기 2: 0.5초)
-            if (attachedFish.type === 3) catchThreshold = 400;      // 물고기 3: 0.4초
-            else if (attachedFish.type === 4) catchThreshold = 300; // 물고기 4: 0.3초
+            let catchThreshold = 800; // 기본 (물고기 2: 0.8초)
+            if (attachedFish.type === 3) catchThreshold = 600;      // 물고기 3: 0.6초
+            else if (attachedFish.type === 4) catchThreshold = 400; // 물고기 4: 0.4초
             else if (attachedFish.type === 5) catchThreshold = 200; // 물고기 5: 0.2초
 
             if (Date.now() - continuousBurnStartTime >= catchThreshold) {
@@ -3233,9 +3350,16 @@ function checkFishing() {
             if (dist < fishRect.width * 0.35) {
                 // 미끼에 닿은 상태에서 버너를 눌러야 낚임
                 if (isBurning) {
+                    // 최근에 풀려난 물고기면 3초간 재부착 방지
+                    if (fish.type === 1 && fish.lastReleaseTime && (Date.now() - fish.lastReleaseTime < 3000)) {
+                        continue;
+                    }
+
                     attachedFish = fish;
+                    soundMgr.play('hit');
                     if (fish.type === 1) {
                         draggingOffset = getBaitOffset();
+                        fish.attachTime = Date.now();
                     }
                     break;
                 }
@@ -3281,8 +3405,9 @@ function catchFish(fish) {
     event4FishCaughtScore += points;
     
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
-    if (!isAlreadyCleared || canReceiveEventPoints()) {
+    if (shouldAllowEventCredits()) {
         totalCredits += points;
+        recordEventCreditGain();
     }
     savePlayerData();
     
@@ -3320,6 +3445,113 @@ function clearFish() {
         }
     });
     activeFish = [];
+}
+
+function createBirds() {
+    clearBirds();
+    // 2, 3, 4, 5구역(인덱스 1~4)에 각각 1마리씩 생성
+    for (let zoneIdx = 1; zoneIdx <= 4; zoneIdx++) {
+        const birdContainer = document.createElement('div');
+        birdContainer.className = 'bird-css';
+        birdContainer.innerHTML = `
+                <div class="bird-beak"></div>
+                <div class="bird-head">
+                    <div class="bird-eye"></div>
+                </div>
+                <div class="bird-body"></div>
+                <div class="bird-wing"></div>
+                <div class="bird-tail"></div>
+            `;
+        gameContainer.appendChild(birdContainer);
+
+        const bird = {
+            el: birdContainer,
+            x: Math.random() * 100,
+            y: zoneIdx * (110 / 7) + (Math.random() * 10),
+            velX: (Math.random() * 0.28 + 0.21) * (Math.random() > 0.5 ? 1 : -1),
+            width: 25,
+            height: 18
+        };
+        activeBirds.push(bird);
+    }
+}
+
+function updateBirds() {
+    const now = performance.now();
+    activeBirds.forEach(bird => {
+        bird.x += bird.velX;
+        
+        // Wrap around
+        if (bird.x > 110) bird.x = -10;
+        if (bird.x < -10) bird.x = 110;
+
+        bird.el.style.left = `${bird.x}%`;
+        bird.el.style.bottom = `calc(8.05% + ${bird.y * 0.9195}%)`;
+        
+        // Face movement direction
+        const flip = bird.velX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+        bird.el.style.transform = `translateX(-50%) ${flip}`;
+    });
+}
+
+function clearBirds() {
+    activeBirds.forEach(bird => {
+        if (bird.el && bird.el.parentNode) {
+            bird.el.remove();
+        }
+    });
+    activeBirds = [];
+}
+
+function checkBirdCollisions() {
+    if (gameState !== 'PLAY') return;
+    if (isStunned && Date.now() < stunEndTime) return; // 이미 부딪힌 상태면 무시
+    
+    const skyHeight = gameContainer.clientHeight * 0.9195;
+    const skyWidth = gameContainer.clientWidth;
+
+    // 1. Balloon Body Center (Blue Circle)
+    const bodyXPx = (balloonX / 100) * skyWidth;
+    const bodyYPx = ((balloonY + getMarkerOffset()) / 100) * skyHeight;
+    const bodyRadius = 32.5 / 2;
+
+    // 2. Basket Center (Red Dot)
+    const basketXPx = (balloonX / 100) * skyWidth;
+    const basketYPx = ((balloonY + getBasketOffset()) / 100) * skyHeight;
+    const basketRadius = 7.8 / 2;
+
+    activeBirds.forEach(bird => {
+        const birdXPx = (bird.x / 100) * skyWidth;
+        const birdYPx = (bird.y / 100) * skyHeight;
+        
+        // Bird Hitbox (approximate circle for the body/head area)
+        const birdRadius = 6;  // 10 -> 6 (더 정밀한 판정)        
+        // Body-Bird Collision (Circumference check)
+        const dxBody = bodyXPx - birdXPx;
+        const dyBody = bodyYPx - birdYPx;
+        const distBodySq = dxBody * dxBody + dyBody * dyBody;
+        const combinedBodyRadiusSq = Math.pow(bodyRadius + birdRadius, 2);
+
+        // Basket-Bird Collision (Circumference check)
+        const dxBasket = basketXPx - birdXPx;
+        const dyBasket = basketYPx - birdYPx;
+        const distBasketSq = dxBasket * dxBasket + dyBasket * dyBasket;
+        const combinedBasketRadiusSq = Math.pow(basketRadius + birdRadius, 2);
+
+        if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
+            // 붉은새 충돌 효과 적용
+            isStunned = true;
+            stunEndTime = Date.now() + 2000;
+            soundMgr.play('bird_hit'); // 'hit' 대신 'bird_hit' 재생
+            
+            // 새도 같이 흔든다
+            bird.el.classList.add('shake-bird');
+            
+            setTimeout(() => {
+                bird.el.classList.remove('shake-bird');
+            }, 2000);
+        }
+    });
 }
 
 function updateNextLevelButtonVisibility() {
@@ -3532,7 +3764,7 @@ async function updateRankUI() {
     if(rankListEl) rankListEl.innerHTML = '<div style="text-align:center; padding:10px; color:#2ecc71;">Loading ranking...</div>';
     let board = [];
     try {
-        const querySnapshot = await db.collection("leaderboard_ydp").get();
+        const querySnapshot = await db.collection("leaderboard").get();
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             // Ensure necessary fields exist to avoid crashes
@@ -3702,7 +3934,7 @@ if (submitRankBtn) {
         }
 
         try {
-            await db.collection("leaderboard_ydp").doc(nickname).set({
+            await db.collection("leaderboard").doc(nickname).set({
                 nickname: nickname,
                 levelScores: Object.assign({}, myLevelBestScores),
                 overallScore: calculateMyOverallScore(),
