@@ -599,7 +599,15 @@ const LEVEL_CONFIGS = {
     },
     27: {
         displayName: "23",
-        winds: [1.0, 1.5, -1.5, -3.0, 1.5, -2.5, 1.5],
+        winds: [1.75, 2.0, -1.75, -1.75, 2.0, -1.75, 1.5],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    28: {
+        displayName: "24",
+        winds: [0.75, 1.25, -1.5, -3.0, 1.5, -2.5, 1.5],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
@@ -1855,12 +1863,16 @@ function update(timestamp) {
 
 
 function updateTargetLine() {
-    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~27레벨 공통)
-    if (currentLevel >= 0 && currentLevel <= 27) {
+    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~28레벨 공통)
+    if (currentLevel >= 0 && currentLevel <= 28) {
         if (currentLevel === 25 || currentLevel === 26 || currentLevel === 27) {
-            // 레벨 21, 22, 23: 좌측으로 1m/s 속도로 이동 (가중치 0.2 적용 시 -0.2)
+            // 레벨 21, 22, 23: 좌측으로 이동 (기본)
             targetLineX -= 0.2;
             if (targetLineX < 0) targetLineX = 100;
+        } else if (currentLevel === 28) {
+            // 레벨 24: 우측으로 이동
+            targetLineX += 0.2;
+            if (targetLineX > 100) targetLineX = 0;
         } else {
             targetLineX = 50;
         }
@@ -1899,16 +1911,21 @@ function updateTargetLine() {
 
 function handleMovement() {
     // Vertical logic (Burner + Gravity)
+    let burnDuration = 0;
     if (isBurning) {
         if (continuousBurnStartTime === 0) continuousBurnStartTime = Date.now();
-        const burnDuration = Date.now() - continuousBurnStartTime;
+        burnDuration = Date.now() - continuousBurnStartTime;
 
         if (burnDuration > 2000) {
             gameOver();
             return;
         }
 
-        velY += currentBurnerForce;
+        let appliedForce = currentBurnerForce;
+        if (burnDuration > 500) {
+            appliedForce *= 1.155; // 0.5초 이상 누를 시 상승 힘 5.5% 추가 증가 (총 15.5%)
+        }
+        velY += appliedForce;
 
         // 가스 소모 (버너 사용 시 매 프레임 소모)
         gas -= 0.45;
@@ -1920,7 +1937,11 @@ function handleMovement() {
     velY *= FRICTION;
 
     // Limit upward speed
-    if (velY > MAX_UPWARD_VELOCITY) velY = MAX_UPWARD_VELOCITY;
+    let effectiveMaxUpwardVel = MAX_UPWARD_VELOCITY;
+    if (isBurning && burnDuration > 500) {
+        effectiveMaxUpwardVel *= 1.155; // 0.5초 이상 누를 시 최대 상승 속도 5.5% 추가 증가 (총 15.5%)
+    }
+    if (velY > effectiveMaxUpwardVel) velY = effectiveMaxUpwardVel;
 
     let movementScale = 0.2;
     if (isStunned) {
@@ -2851,15 +2872,15 @@ function resetGame() {
         clearFish();
     }
 
-    // Level 21, 22, 23: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 27) {
+    // Level 21, 22, 24: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 28) {
         createBirds();
     } else {
         clearBirds();
     }
 
-    // Level 23: Eagle Obstacles
-    if (currentLevel === 27) {
+    // Level 23, 24: Eagle Obstacles
+    if (currentLevel === 27 || currentLevel === 28) {
         createEagles();
     } else {
         clearEagles();
@@ -3511,15 +3532,34 @@ function createBirds() {
         gameContainer.appendChild(birdContainer);
 
         let birdVelX = (Math.random() * 0.28 + 0.21) * (Math.random() > 0.5 ? 1 : -1);
-        // 레벨 23(currentLevel 27), 2구역(zoneIdx 1) 붉은새는 우측에서 좌측으로 이동 (음수)
-        if (currentLevel === 27 && zoneIdx === 1) {
-            birdVelX = -Math.abs(birdVelX);
+        let birdX = Math.random() * 100;
+        let birdY = zoneIdx * (110 / 7) + (Math.random() * 10);
+
+        // 레벨 23, 24, 2구역(zoneIdx 1) 붉은새는 우측벽면 중앙에서 아래로 40px 지점에서 출발 (속도 0.5 고정)
+        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 1) {
+            birdVelX = -0.5; // 고정 속도 0.5 (좌측 방향)
+            birdX = 100; // 우측 벽면
+            const skyHeight = gameContainer.clientHeight * 0.9195;
+            const pixelOffsetPct = skyHeight > 0 ? (40 / skyHeight) * 100 : 5.6; 
+            birdY = (zoneIdx + 0.5) * (100 / 7) - pixelOffsetPct; // 2구역 중앙에서 40px 하강
+        }
+        // 레벨 23, 24, 3구역(zoneIdx 2) 붉은새는 우측벽면 중앙에서 출발 (속도 0.3 고정)
+        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 2) {
+            birdVelX = -0.3; // 고정 속도 0.3 (좌측 방향)
+            birdX = 100; // 우측 벽면
+            birdY = (zoneIdx + 0.5) * (100 / 7); // 3구역 중앙 (약 35.71%)
+        }
+        // 레벨 23, 24, 4구역(zoneIdx 3) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정)
+        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 3) {
+            birdVelX = 0.3; // 고정 속도 0.3 (우측 방향)
+            birdX = 0; // 좌측 벽면
+            birdY = (zoneIdx + 0.5) * (100 / 7); // 4구역 중앙 (약 50.0%)
         }
 
         const bird = {
             el: birdContainer,
-            x: Math.random() * 100,
-            y: zoneIdx * (110 / 7) + (Math.random() * 10),
+            x: birdX,
+            y: birdY,
             velX: birdVelX,
             width: 21.3,
             height: 15.3
@@ -3618,87 +3658,141 @@ function checkBirdCollisions() {
 function createEagles() {
     clearEagles();
     const now = performance.now();
-    // 1마리 배치
-    for (let i = 0; i < 1; i++) {
+    const config = LEVEL_CONFIGS[currentLevel];
+    const isLevel23 = config && config.displayName === "23";
+    const isLevel24 = config && config.displayName === "24";
+    const isSpecialPatternLevel = isLevel23 || isLevel24;
+
+    // 23레벨은 4마리, 24레벨은 2마리 배치, 그 외 레벨은 1마리
+    const eagleCount = isLevel23 ? 4 : (isLevel24 ? 2 : 1);
+    for (let i = 0; i < eagleCount; i++) {
         const eagleEl = document.createElement('img');
         eagleEl.src = '독수리.png';
         eagleEl.className = 'eagle-obstacle';
         eagleEl.style.position = 'absolute';
-        eagleEl.style.width = '72px'; // 60px * 1.2 = 72px
+        eagleEl.style.width = '72px'; 
         eagleEl.style.height = 'auto';
         eagleEl.style.zIndex = '12';
         gameContainer.appendChild(eagleEl);
 
-        // 서로 멀리 떨어져서 비행하도록 초기 위치 설정 (20%, 80%)
-        const startX = (i === 0) ? 20 : 80;
-        // 1구역 하단(약 5%) ~ 5구역 상단(약 70%) 범위 내에서 시작
-        const startY = 10 + (Math.random() * 50); 
+        let startX, startY, velX, velY;
+
+        if (isSpecialPatternLevel) {
+            const zoneHeight = 100 / 7;
+            let targetX, targetY;
+
+            if (i === 0) {
+                // 독수리 1: 3-4구역 경계 우측 -> 1구역 하단 중앙
+                startX = 100;
+                startY = 3 * zoneHeight;
+                targetX = 50;
+                targetY = 0;
+            } else if (i === 1) {
+                // 독수리 2: 4-5구역 경계 좌측 -> 7구역 상단 중앙
+                startX = 0;
+                startY = 4 * zoneHeight;
+                targetX = 50;
+                targetY = 100;
+            } else if (i === 2) {
+                // 독수리 3: 3-4구역 경계 좌측 -> 1구역 하단 중앙
+                startX = 0;
+                startY = 3 * zoneHeight;
+                targetX = 50;
+                targetY = 0;
+            } else {
+                // 독수리 4: 4-5구역 경계 우측 -> 7구역 상단 중앙
+                startX = 100;
+                startY = 4 * zoneHeight;
+                targetX = 50;
+                targetY = 100;
+            }
+            
+            const baseSpeed = (config.displayName === "23") ? 0.3 : 0.25; // 23레벨 독수리 속도 20% 상향 (0.25 -> 0.3)
+            const dx = targetX - startX;
+            const dy = targetY - startY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            velX = (dx / dist) * baseSpeed;
+            velY = (dy / dist) * baseSpeed;
+        } else {
+            // 다른 레벨을 위한 기본 로직
+            startX = (i === 0) ? 20 : 80;
+            startY = 10 + (Math.random() * 50); 
+            velX = (Math.random() * 0.15 + 0.15) * (i === 0 ? 1 : -1);
+            velY = (Math.random() * 0.1 + 0.1) * (Math.random() > 0.5 ? 1 : -1);
+        }
         
         const eagle = {
             el: eagleEl,
             x: startX,
             y: startY,
-            velX: (Math.random() * 0.15 + 0.15) * (i === 0 ? 1 : -1),
-            velY: (Math.random() * 0.1 + 0.1) * (Math.random() > 0.5 ? 1 : -1), // 대각선 비행을 위한 Y 속도
+            velX: velX,
+            velY: velY,
             lastDirChangeTime: now,
             width: 72,
-            height: 48 
+            height: 48,
+            isLevel23: isSpecialPatternLevel
         };
+        
+        // 초기 위치 즉시 반영
+        eagleEl.style.left = `${eagle.x}%`;
+        eagleEl.style.bottom = `calc(8.05% + ${eagle.y * 0.9195}%)`;
+        
         activeEagles.push(eagle);
     }
 }
 
 function updateEagles() {
+    // 스타트를 누를 때만 움직이도록 설정
+    if (gameState !== 'PLAY') return;
+    
     const now = performance.now();
     activeEagles.forEach(eagle => {
-        // 3초마다 대각선 방향 전환
-        if (now - eagle.lastDirChangeTime > 3000) {
-            eagle.velX *= -1;
-            eagle.velY *= -1;
-            eagle.lastDirChangeTime = now;
+        if (!eagle.isLevel23) {
+            // 기존 일반 독수리: 3초마다 방향 무작위 전환
+            if (now - eagle.lastDirChangeTime > 3000) {
+                eagle.velX *= -1;
+                eagle.velY *= -1;
+                eagle.lastDirChangeTime = now;
+            }
         }
 
         eagle.x += eagle.velX;
         eagle.y += eagle.velY;
         
-        // 화면 좌우 경계 체크
+        // 반사 로직 (같은 반사각으로 이동)
+        // 좌우 벽면 반사
         if (eagle.x > 100) {
             eagle.x = 100;
             eagle.velX *= -1;
-            eagle.lastDirChangeTime = now;
         }
         if (eagle.x < 0) {
             eagle.x = 0;
             eagle.velX *= -1;
-            eagle.lastDirChangeTime = now;
         }
 
-        // 고도 경계 체크 (1구역 ~ 5구역 범위: 약 5% ~ 70%)
-        if (eagle.y > 70) {
-            eagle.y = 70;
+        // 상하 경계 반사
+        const maxY = 95; // 화면 상단 여유
+        const minY = 0;  // 1구역 하단
+
+        if (eagle.y > maxY) {
+            eagle.y = maxY;
             eagle.velY *= -1;
-            eagle.lastDirChangeTime = now;
         }
-        if (eagle.y < 5) {
-            eagle.y = 5;
+        if (eagle.y < minY) {
+            eagle.y = minY;
             eagle.velY *= -1;
-            eagle.lastDirChangeTime = now;
         }
 
         eagle.el.style.left = `${eagle.x}%`;
         eagle.el.style.bottom = `calc(8.05% + ${eagle.y * 0.9195}%)`;
         
-        // 진행 방향 및 하강/상승에 따라 이미지 반전 및 회전
+        // 진행 방향에 따른 이미지 반전 및 회전
         const flip = eagle.velX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
-        
-        // 하강할 때는 머리가 아래를 향하게, 상승할 때는 위를 향하게 각도 조정
         let rotation = 0;
         if (eagle.velX > 0) {
-            // 좌측에서 우측으로 이동 (이미지 반전 상태)
             rotation = (eagle.velY < 0) ? -20 : 10;
         } else {
-            // 우측에서 좌측으로 이동 (이미지 기본 상태)
-            // 하강 시 머리가 들리던 문제 수정을 위해 음수값(-20) 적용, 상승 시 수평이던 문제 수정을 위해 양수값(20) 적용
             rotation = (eagle.velY < 0) ? -20 : 20;
         }
         
