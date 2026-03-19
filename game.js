@@ -599,7 +599,7 @@ const LEVEL_CONFIGS = {
     },
     27: {
         displayName: "23",
-        winds: [1.75, 2.0, -1.75, -1.75, 2.0, -1.75, 1.5],
+        winds: [1.75, -2, 1.75, -1.75, 2.0, -1.75, 1.5],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
