@@ -607,7 +607,7 @@ const LEVEL_CONFIGS = {
     },
     28: {
         displayName: "24",
-        winds: [0.75, 1.25, -1.5, -3.0, 1.5, -2.5, 1.5],
+        winds: [2, -5, 5, -5, 5, -5, 2],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
@@ -662,8 +662,8 @@ let isStunned = false; // 붉은새 충돌 시 상태
 let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
-const BONUS_G1_LEVELS = ["6", "7", "14", "15"];
-const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20"];
+const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24"];
 
 function getTotalItemsCount() {
     let total = 0;
@@ -1224,7 +1224,7 @@ function resumeGame() {
     if (levelHintEl) {
         const config = LEVEL_CONFIGS[currentLevel];
         const displayName = config.displayName;
-        if (displayName === "5" || displayName === "6" || displayName === "7" || displayName === "8" || displayName === "14" || displayName === "15") {
+        if (BONUS_G1_LEVELS.includes(displayName) || BONUS_G2_LEVELS.includes(displayName)) {
             levelHintEl.classList.remove('hidden');
         }
     }
@@ -1866,13 +1866,13 @@ function updateTargetLine() {
     // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~28레벨 공통)
     if (currentLevel >= 0 && currentLevel <= 28) {
         if (currentLevel === 25 || currentLevel === 26 || currentLevel === 27) {
-            // 레벨 21, 22, 23: 좌측으로 이동 (기본)
+            // 레벨 21, 22, 23: 좌측으로 이동 (속도 0.2)
             targetLineX -= 0.2;
             if (targetLineX < 0) targetLineX = 100;
         } else if (currentLevel === 28) {
-            // 레벨 24: 우측으로 이동
-            targetLineX += 0.2;
-            if (targetLineX > 100) targetLineX = 0;
+            // 레벨 24: 좌측으로 이동 (속도 0.15)
+            targetLineX -= 0.15;
+            if (targetLineX < 0) targetLineX = 100;
         } else {
             targetLineX = 50;
         }
@@ -2360,9 +2360,8 @@ function gameOver(msg = 'OVERHEAT') {
         }
 
         if (levelHintEl) {
-
             const displayName = LEVEL_CONFIGS[currentLevel].displayName;
-            if (displayName === "5" || displayName === "6" || displayName === "7" || displayName === "8" || displayName === "14" || displayName === "15") {
+            if (BONUS_G1_LEVELS.includes(displayName) || BONUS_G2_LEVELS.includes(displayName)) {
                 levelHintEl.classList.remove('hidden');
             }
         }
@@ -2873,7 +2872,8 @@ function resetGame() {
     }
 
     // Level 21, 22, 24: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 28) {
+    // Level 21, 22: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26) {
         createBirds();
     } else {
         clearBirds();
@@ -3543,11 +3543,17 @@ function createBirds() {
             const pixelOffsetPct = skyHeight > 0 ? (40 / skyHeight) * 100 : 5.6; 
             birdY = (zoneIdx + 0.5) * (100 / 7) - pixelOffsetPct; // 2구역 중앙에서 40px 하강
         }
-        // 레벨 23, 24, 3구역(zoneIdx 2) 붉은새는 우측벽면 중앙에서 출발 (속도 0.3 고정)
-        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 2) {
-            birdVelX = -0.3; // 고정 속도 0.3 (좌측 방향)
-            birdX = 100; // 우측 벽면
-            birdY = (zoneIdx + 0.5) * (100 / 7); // 3구역 중앙 (약 35.71%)
+        // 레벨 23, 3구역(zoneIdx 2) 붉은새는 우측벽면 중앙에서 출발 (속도 0.3 고정, 좌측 이동)
+        if (currentLevel === 27 && zoneIdx === 2) {
+            birdVelX = -0.3; 
+            birdX = 100; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
+        }
+        // 레벨 24, 3구역(zoneIdx 2) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정, 우측 이동)
+        if (currentLevel === 28 && zoneIdx === 2) {
+            birdVelX = 0.3; 
+            birdX = 0; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
         }
         // 레벨 23, 24, 4구역(zoneIdx 3) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정)
         if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 3) {
@@ -3663,8 +3669,8 @@ function createEagles() {
     const isLevel24 = config && config.displayName === "24";
     const isSpecialPatternLevel = isLevel23 || isLevel24;
 
-    // 23레벨은 4마리, 24레벨은 2마리 배치, 그 외 레벨은 1마리
-    const eagleCount = isLevel23 ? 4 : (isLevel24 ? 2 : 1);
+    // 23, 24레벨은 4마리 배치, 그 외 레벨은 1마리
+    const eagleCount = (isLevel23 || isLevel24) ? 4 : 1;
     for (let i = 0; i < eagleCount; i++) {
         const eagleEl = document.createElement('img');
         eagleEl.src = '독수리.png';
@@ -3828,7 +3834,7 @@ function checkEagleCollisions() {
         const eagleXPx = (eagle.x / 100) * skyWidth;
         const eagleYPx = (eagle.y / 100) * skyHeight + 24; // 이미지 중앙 부근 (48/2)
         
-        const eagleRadius = 21.6; // 독수리는 히트박스가 더 큼 (18 * 1.2)
+        const eagleRadius = 15; // 독수리 히트박스 축소 (더 직관적인 판정)
         
         const dxBody = bodyXPx - eagleXPx;
         const dyBody = bodyYPx - eagleYPx;
