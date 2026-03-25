@@ -88,12 +88,60 @@
             </div>
         </div>
 
+        <div id="ad-selection-overlay" class="overlay hidden">
+            <div class="selection-container">
+                <h2 class="selection-title">광고 보상 선택</h2>
+                <div class="selection-options">
+                    <button id="ad-select-life-btn" class="selection-btn">
+                        <span class="btn-title">생명 충전</span>
+                        <span class="btn-desc">20초 광고 시청 후<br>생명 2개 획득</span>
+                    </button>
+                    <button id="ad-select-event-btn" class="selection-btn">
+                        <span class="btn-title">이벤트 게임</span>
+                        <span class="btn-desc">20초 광고 시청 후<br>이벤트 게임으로 크레딧 획득</span>
+                    </button>
+                </div>
+                <button id="close-ad-selection-btn" class="close-btn-main">닫기</button>
+            </div>
+        </div>
+
         <div id="ad-overlay" class="overlay hidden">
             <div class="ad-content">
-                <h2 class="ad-title">광고시간</h2>
+                <h2 class="ad-title" id="ad-reward-title">광고시간</h2>
                 <p class="ad-message">열기구게임 많이 사랑해주세요!!!🎈🎈🎈</p>
                 <div class="ad-timer">20</div>
                 <button id="get-life-ad-btn" class="hidden">생명받기</button>
+                <div id="ad-event-rewards" class="hidden">
+                    <p class="reward-hint">원하는 이벤트 번호를 선택하세요!</p>
+                    <div class="event-reward-buttons">
+                        <button class="event-reward-btn" data-event="1">
+                            <span class="evt-num">1</span>
+                            <span class="evt-label">코인</span>
+                        </button>
+                        <button class="event-reward-btn" data-event="2">
+                            <span class="evt-num">2</span>
+                            <span class="evt-label">스테이크</span>
+                        </button>
+                        <button class="event-reward-btn" data-event="3">
+                            <span class="evt-num">3</span>
+                            <span class="evt-label">팝콘</span>
+                        </button>
+                        <button class="event-reward-btn" data-event="4">
+                            <span class="evt-num">4</span>
+                            <span class="evt-label">낚시</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="event-selection-overlay" class="overlay hidden">
+            <div class="selection-container">
+                <h2 class="selection-title">이벤트 게임 선택</h2>
+                <div id="event-buttons-container" class="selection-options vertical">
+                    <!-- Javascript will populate cleared events here -->
+                </div>
+                <button id="close-event-selection-btn" class="close-btn-main">닫기</button>
             </div>
         </div>
 

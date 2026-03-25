@@ -100,6 +100,20 @@ const myRankPosEl = document.getElementById('my-rank-pos');
 const rankListEl = document.getElementById('rank-list');
 const rankNicknameInput = document.getElementById('rank-nickname');
 
+// Ad & Event selection elements
+const adSelectionOverlay = document.getElementById('ad-selection-overlay');
+const adSelectLifeBtn = document.getElementById('ad-select-life-btn');
+const adSelectEventBtn = document.getElementById('ad-select-event-btn');
+const closeAdSelectionBtn = document.getElementById('close-ad-selection-btn');
+const adRewardTitle = document.getElementById('ad-reward-title');
+const startEventAdBtn = document.getElementById('start-event-ad-btn');
+const adEventRewardsEl = document.getElementById('ad-event-rewards');
+const eventSelectionOverlay = document.getElementById('event-selection-overlay');
+const eventButtonsContainer = document.getElementById('event-buttons-container');
+const closeEventSelectionBtn = document.getElementById('close-event-selection-btn');
+
+let isRewardedEventPlay = false; // 광고 시청 후 보상으로 하는 이벤트 플레이인지 여부
+
 let popcornGatheredScore = 0;
 let event4FishCaughtScore = 0;
 let popcornDepositTimer = null;
@@ -142,6 +156,9 @@ let currentLevel = parseInt(localStorage.getItem('balloon_current_level')) || 0;
 let lastEventCreditTime = parseInt(localStorage.getItem('balloon_last_event_credit_time')) || 0;
 
 function shouldAllowEventCredits() {
+    // 광고 보상 플레이인 경우 무조건 허용
+    if (isRewardedEventPlay) return true;
+
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
     // 아직 클리어하지 않은 레벨은 항상 크레딧 지급
     if (!isAlreadyCleared) return true;
@@ -591,7 +608,7 @@ const LEVEL_CONFIGS = {
     },
     26: {
         displayName: "22",
-        winds: [-1.5, 1.5, 2.5, -2.0, 1.5, -1.25, 1.5],
+        winds: [-1.5, 1.5, 2.25, -2.25, 1.5, -1.25, 1.5],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
@@ -612,8 +629,21 @@ const LEVEL_CONFIGS = {
         maxTime: 40,
         platformY: 6.0,
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    29: {
+        displayName: "25",
+        winds: [2, -4.75, 2, -4.75, 3, -3, 3],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
+
+if (!LEVEL_CONFIGS[currentLevel]) {
+    currentLevel = 0;
+    localStorage.setItem('balloon_current_level', currentLevel);
+}
 
 let currentMaxGas = LEVEL_CONFIGS[0].maxGas;
 let currentMaxTime = LEVEL_CONFIGS[0].maxTime;
@@ -663,7 +693,7 @@ let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
-const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24"];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
 
 function getTotalItemsCount() {
     let total = 0;
@@ -1175,6 +1205,7 @@ function init() {
 
 
 function startGame() {
+    isRewardedEventPlay = false; // 기본적으로 광고 보상 플레이가 아님
     balloonX = 50;
     const config = LEVEL_CONFIGS[currentLevel];
     const isSpecialStart = config.displayName === "EVENT 2" || config.displayName === "EVENT 4";
@@ -1865,9 +1896,13 @@ function update(timestamp) {
 function updateTargetLine() {
     // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~28레벨 공통)
     if (currentLevel >= 0 && currentLevel <= 28) {
-        if (currentLevel === 25 || currentLevel === 26 || currentLevel === 27) {
-            // 레벨 21, 22, 23: 좌측으로 이동 (속도 0.2)
+        if (currentLevel === 25 || currentLevel === 27) {
+            // 레벨 21, 23: 좌측으로 이동 (속도 0.2)
             targetLineX -= 0.2;
+            if (targetLineX < 0) targetLineX = 100;
+        } else if (currentLevel === 26) {
+            // 레벨 22: 좌측으로 이동 (속도 0.25)
+            targetLineX -= 0.25;
             if (targetLineX < 0) targetLineX = 100;
         } else if (currentLevel === 28) {
             // 레벨 24: 좌측으로 이동 (속도 0.15)
@@ -2324,7 +2359,7 @@ function gameOver(msg = 'OVERHEAT') {
         failReasonBubble.classList.remove('hidden');
         setTimeout(() => {
             failReasonBubble.classList.add('hidden');
-        }, 500); // 0.5초만 보이게 수정
+        }, 2000); // 2.0초 동안 보이게 수정
     }
 
     setTimeout(() => {
@@ -3517,7 +3552,7 @@ function createBirds() {
         zonesToSpawn.push(4); // 5구역 한 마리 더
     }
 
-    zonesToSpawn.forEach(zoneIdx => {
+    zonesToSpawn.forEach((zoneIdx, loopIdx) => {
         const birdContainer = document.createElement('div');
         birdContainer.className = 'bird-css';
         birdContainer.innerHTML = `
@@ -3535,8 +3570,65 @@ function createBirds() {
         let birdX = Math.random() * 100;
         let birdY = zoneIdx * (110 / 7) + (Math.random() * 10);
 
+        // 레벨 21, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
+        if (currentLevel === 25 && zoneIdx === 1) {
+            birdVelX = -0.4; 
+            birdX = 100; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
+        }
+        // 레벨 21, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
+        if (currentLevel === 25 && (zoneIdx === 2 || zoneIdx === 3)) {
+            birdVelX = 0.4; 
+            birdX = 0; 
+            birdY = zoneIdx * (100 / 7);
+        }
+        // 레벨 21, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
+        if (currentLevel === 25 && zoneIdx === 4) {
+            birdVelX = -0.5; 
+            birdX = 100; 
+            birdY = zoneIdx * (100 / 7);
+        }
+
+        // 레벨 22, 2구역(zoneIdx 1) 붉은새 커스텀 (좌측 벽면 중앙 출발, 속도 0.4)
+        if (currentLevel === 26 && zoneIdx === 1) {
+            birdVelX = 0.4; 
+            birdX = 0; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
+        }
+        // 레벨 22, 3구역(zoneIdx 2) 붉은새 1 (LoopIdx 1) - 우측 하단 1/4 출발, 속도 0.4
+        if (currentLevel === 26 && loopIdx === 1) {
+            birdVelX = -0.4; 
+            birdX = 100; 
+            birdY = (zoneIdx + 0.25) * (100 / 7);
+        }
+        // 레벨 22, 3구역(zoneIdx 2) 붉은새 2 (LoopIdx 4) - 좌측 상단 3/4 출발, 속도 0.4
+        if (currentLevel === 26 && loopIdx === 4) {
+            birdVelX = 0.4; 
+            birdX = 0; 
+            birdY = (zoneIdx + 0.75) * (100 / 7);
+        }
+
+        // 레벨 22, 4구역(zoneIdx 3) 붉은새 커스텀 (우측 중간 출발, 속도 0.4)
+        if (currentLevel === 26 && zoneIdx === 3) {
+            birdVelX = -0.4; 
+            birdX = 100; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
+        }
+        // 레벨 22, 5구역(zoneIdx 4) 붉은새 1 (LoopIdx 3) - 좌측 중간 출발, 속도 0.3
+        if (currentLevel === 26 && loopIdx === 3) {
+            birdVelX = 0.3; 
+            birdX = 0; 
+            birdY = (zoneIdx + 0.5) * (100 / 7);
+        }
+        // 레벨 22, 5구역(zoneIdx 4) 붉은새 2 (LoopIdx 5) - 우측 하단 출발, 속도 0.28
+        if (currentLevel === 26 && loopIdx === 5) {
+            birdVelX = -0.28; 
+            birdX = 100; 
+            birdY = zoneIdx * (100 / 7);
+        }
+
         // 레벨 23, 24, 2구역(zoneIdx 1) 붉은새는 우측벽면 중앙에서 아래로 40px 지점에서 출발 (속도 0.5 고정)
-        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 1) {
+        if ((currentLevel === 27 || currentLevel === 28 || currentLevel === 29) && zoneIdx === 1) {
             birdVelX = -0.5; // 고정 속도 0.5 (좌측 방향)
             birdX = 100; // 우측 벽면
             const skyHeight = gameContainer.clientHeight * 0.9195;
@@ -3550,13 +3642,13 @@ function createBirds() {
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
         // 레벨 24, 3구역(zoneIdx 2) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정, 우측 이동)
-        if (currentLevel === 28 && zoneIdx === 2) {
+        if ((currentLevel === 28 || currentLevel === 29) && zoneIdx === 2) {
             birdVelX = 0.3; 
             birdX = 0; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
         // 레벨 23, 24, 4구역(zoneIdx 3) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정)
-        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 3) {
+        if ((currentLevel === 27 || currentLevel === 28 || currentLevel === 29) && zoneIdx === 3) {
             birdVelX = 0.3; // 고정 속도 0.3 (우측 방향)
             birdX = 0; // 좌측 벽면
             birdY = (zoneIdx + 0.5) * (100 / 7); // 4구역 중앙 (약 50.0%)
@@ -3638,6 +3730,13 @@ function checkBirdCollisions() {
         const combinedBasketRadiusSq = Math.pow(basketRadius + birdRadius, 2);
 
         if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
+            // 21, 22레벨에서는 즉시 폭발
+            const config = LEVEL_CONFIGS[currentLevel];
+            if (config && (config.displayName === "21" || config.displayName === "22")) {
+                gameOver('CRASH');
+                return;
+            }
+
             // 붉은새 충돌 효과 적용
             isStunned = true;
             stunEndTime = Date.now() + 1500; // 2000 -> 1500
@@ -3667,10 +3766,11 @@ function createEagles() {
     const config = LEVEL_CONFIGS[currentLevel];
     const isLevel23 = config && config.displayName === "23";
     const isLevel24 = config && config.displayName === "24";
-    const isSpecialPatternLevel = isLevel23 || isLevel24;
+    const isLevel25 = config && config.displayName === "25";
+    const isSpecialPatternLevel = isLevel23 || isLevel24 || isLevel25;
 
     // 23, 24레벨은 4마리 배치, 그 외 레벨은 1마리
-    const eagleCount = (isLevel23 || isLevel24) ? 4 : 1;
+    const eagleCount = (isLevel23 || isLevel24 || isLevel25) ? 4 : 1;
     for (let i = 0; i < eagleCount; i++) {
         const eagleEl = document.createElement('img');
         eagleEl.src = '독수리.png';
@@ -3713,7 +3813,7 @@ function createEagles() {
                 targetY = 100;
             }
             
-            const baseSpeed = (config.displayName === "23") ? 0.3 : 0.25; // 23레벨 독수리 속도 20% 상향 (0.25 -> 0.3)
+            const baseSpeed = (config.displayName === "23" || config.displayName === "25") ? 0.3 : 0.25; // 23, 25레벨 독수리 속도 20% 상향 (0.25 -> 0.3)
             const dx = targetX - startX;
             const dy = targetY - startY;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -4046,13 +4146,173 @@ if (adsBtn) {
         if (!settingsScreen.classList.contains('hidden')) return;
         if (!isSoundPreloaded) await startSoundSystem();
         soundMgr.resume();
+        
+        // 광고 선택 메뉴 표시
+        if (adSelectionOverlay) {
+            adSelectionOverlay.classList.remove('hidden');
+            
+            // 생명이 가득 찬 경우 생명 충전 버튼 비활성화 시각적 피드백 (필요 시)
+            if (lives >= 7) {
+                adSelectLifeBtn.style.opacity = "0.5";
+            } else {
+                adSelectLifeBtn.style.opacity = "1";
+            }
+        }
+    });
+}
+
+if (adSelectLifeBtn) {
+    adSelectLifeBtn.addEventListener('click', () => {
         if (lives >= 7) {
             alert("생명이 이미 가득 찼습니다! (최대 7개)");
             return;
         }
-        showAd();
+        adSelectionOverlay.classList.add('hidden');
+        showAd('life', 20);
     });
 }
+
+if (adSelectEventBtn) {
+    adSelectEventBtn.addEventListener('click', () => {
+        // 이미 클리어한 이벤트가 있는지 확인
+        const clearedEvents = Object.keys(LEVEL_CONFIGS).filter(lv => {
+            const config = LEVEL_CONFIGS[lv];
+            return config.displayName.includes('EVENT') && clearedLevels.includes(parseInt(lv));
+        });
+
+        if (clearedEvents.length === 0) {
+            alert("아직 클리어한 이벤트 게임이 없습니다! 먼저 일반 게임을 진행하여 이벤트를 클리어하세요.");
+            return;
+        }
+
+        adSelectionOverlay.classList.add('hidden');
+        showAd('event', 20);
+    });
+}
+
+if (closeAdSelectionBtn) {
+    closeAdSelectionBtn.addEventListener('click', () => {
+        adSelectionOverlay.classList.add('hidden');
+    });
+}
+
+function showAd(type, duration) {
+    if (adOverlay) {
+        adOverlay.classList.remove('hidden');
+        
+        if (adRewardTitle) {
+            adRewardTitle.innerText = type === 'life' ? "생명 충전 광고" : "이벤트 보너스 광고";
+        }
+
+        const timerEl = adOverlay.querySelector('.ad-timer');
+        let timeLeft = duration;
+
+        if (timerEl) {
+            timerEl.classList.remove('hidden');
+            timerEl.innerText = timeLeft;
+        }
+        
+        // 버튼 초기화
+        if (getLifeAdBtn) getLifeAdBtn.classList.add('hidden');
+        if (adEventRewardsEl) adEventRewardsEl.classList.add('hidden');
+
+        const countdown = setInterval(() => {
+            timeLeft--;
+            if (timerEl) timerEl.innerText = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                if (timerEl) timerEl.classList.add('hidden');
+                
+                if (type === 'life') {
+                    if (getLifeAdBtn) getLifeAdBtn.classList.remove('hidden');
+                } else {
+                    if (adEventRewardsEl) {
+                        adEventRewardsEl.classList.remove('hidden');
+                        // 클리어 여부에 따라 버튼 활성화/비활성화
+                        const eventBtns = adEventRewardsEl.querySelectorAll('.event-reward-btn');
+                        eventBtns.forEach(btn => {
+                            const eventNum = btn.dataset.event;
+                            const eventLevelIdx = Object.keys(LEVEL_CONFIGS).find(lv => 
+                                LEVEL_CONFIGS[lv].displayName === `EVENT ${eventNum}`
+                            );
+                            
+                            if (eventLevelIdx && clearedLevels.includes(parseInt(eventLevelIdx))) {
+                                btn.classList.remove('locked');
+                            } else {
+                                btn.classList.add('locked');
+                            }
+                        });
+                    }
+                }
+            }
+        }, 1000);
+    }
+}
+
+if (adEventRewardsEl) {
+    const eventBtns = adEventRewardsEl.querySelectorAll('.event-reward-btn');
+    eventBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const eventNum = btn.dataset.event;
+            const eventLevelIdx = Object.keys(LEVEL_CONFIGS).find(lv => 
+                LEVEL_CONFIGS[lv].displayName === `EVENT ${eventNum}`
+            );
+
+            if (eventLevelIdx) {
+                if (adOverlay) adOverlay.classList.add('hidden');
+                startRewardedEvent(parseInt(eventLevelIdx));
+            }
+        });
+    });
+}
+
+function showEventSelection() {
+    if (!eventSelectionOverlay || !eventButtonsContainer) return;
+
+    eventButtonsContainer.innerHTML = '';
+    
+    // 클리어한 이벤트 필터링
+    const clearedEvents = Object.keys(LEVEL_CONFIGS).filter(lv => {
+        const config = LEVEL_CONFIGS[lv];
+        return config.displayName.includes('EVENT') && clearedLevels.includes(parseInt(lv));
+    });
+
+    clearedEvents.forEach(lv => {
+        const config = LEVEL_CONFIGS[lv];
+        const btn = document.createElement('button');
+        btn.className = 'selection-btn';
+        btn.innerHTML = `
+            <span class="btn-title">${config.displayName}</span>
+            <span class="btn-desc">이 게임을 플레이하여 크레딧 획득</span>
+        `;
+        btn.addEventListener('click', () => {
+            eventSelectionOverlay.classList.add('hidden');
+            startRewardedEvent(parseInt(lv));
+        });
+        eventButtonsContainer.appendChild(btn);
+    });
+
+    eventSelectionOverlay.classList.remove('hidden');
+}
+
+if (closeEventSelectionBtn) {
+    closeEventSelectionBtn.addEventListener('click', () => {
+        eventSelectionOverlay.classList.add('hidden');
+    });
+}
+
+function startRewardedEvent(levelIndex) {
+    currentLevel = levelIndex;
+    resetGame();
+    startGame();
+    isRewardedEventPlay = true; // startGame() 이후에 TRUE로 설정하여 덮어쓰지지 않도록 함
+    
+    alert(`${LEVEL_CONFIGS[levelIndex].displayName} 시작! 이번 판은 크레딧을 획득할 수 있습니다.`);
+}
+
+// winGame이나 gameOver에서 isRewardedEventPlay가 초기화될 필요는 없음
+// startGame()에서 다음 판을 시작할 때마다 초기화되기 때문
 
 function getDummyLeaderboard() {
     return [];

@@ -242,13 +242,22 @@ body {
 }
 
 .close-btn-main {
-    background: #e74c3c;
-    color: white;
-    border: none;
+    background: transparent !important;
+    color: #2ecc71 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     padding: 10px 30px;
     border-radius: 10px;
-    font-weight: 800;
+    font-weight: 700;
     cursor: pointer;
+    width: 100%;
+    margin-top: 10px;
+    transition: all 0.2s;
+    box-shadow: none !important;
+}
+
+.close-btn-main:hover {
+    background: rgba(46, 204, 113, 0.1) !important;
+    border-color: #2ecc71 !important;
 }
 
 .wind-label {
@@ -1814,7 +1823,7 @@ button:hover {
 #fail-reason-bubble {
     position: absolute;
     transform: translateX(-50%);
-    background: url('??占쏙옙留먰뭾??png') no-repeat center center;
+    background: url('폭발말풍선.png') no-repeat center center;
     background-size: contain;
     width: 220px;
     height: 165px;
@@ -2587,3 +2596,198 @@ button:hover {
     color: #fff;
     transition: transform 0.2s;
 }
+
+/* Ad and Event Selection Screens */
+.selection-container {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 30px 20px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width: 90%;
+    max-width: 320px;
+    text-align: center;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.8);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.selection-title {
+    color: #fff;
+    font-size: 1.3rem;
+    margin-bottom: 25px;
+    font-weight: 600;
+}
+
+.selection-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.selection-options.vertical {
+    flex-direction: column;
+}
+
+.selection-btn {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: none !important;
+}
+
+.selection-btn:hover {
+    background: rgba(46, 204, 113, 0.1) !important;
+    border-color: #2ecc71;
+}
+
+.btn-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2ecc71;
+    margin-bottom: 8px;
+}
+
+.btn-desc {
+    font-size: 0.75rem;
+    color: #aaa;
+    line-height: 1.4;
+}
+
+.vertical .selection-btn {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 15px 20px;
+    margin-bottom: 10px;
+}
+
+.vertical .btn-title {
+    margin-bottom: 0;
+}
+
+.ad-content {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 30px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 90%;
+    max-width: 320px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.ad-timer {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--secondary-color);
+    margin: 20px 0;
+    text-shadow: 0 0 20px var(--secondary-color)66;
+}
+
+.ad-message {
+    color: #ccc;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+#ads-btn {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 2px 5px;
+    font-size: 0.75rem;
+    color: #2ecc71;
+    cursor: pointer;
+    margin-left: 5px;
+    pointer-events: auto;
+    transition: all 0.2s;
+    font-weight: 700;
+}
+
+#ads-btn:hover {
+    color: #fff;
+    text-shadow: 0 0 5px #2ecc71;
+}
+
+#ad-event-rewards {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+#ad-event-rewards.hidden {
+    display: none;
+}
+
+.reward-hint {
+    color: #2ecc71;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.event-reward-buttons {
+    display: grid; /* 2x2 그리드 배치 */
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 240px; /* 폭 제한 */
+    margin: 0 auto;
+}
+
+.event-reward-btn {
+    width: 100%;
+    height: 54px; /* 높이를 조금 더 확보 */
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(46, 204, 113, 0.4) !important;
+    color: #2ecc71 !important;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column; /* 세로 배치 (숫자 아래 설명) */
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+}
+
+.evt-num {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.evt-label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    white-space: nowrap; /* 글씨가 줄바꿈되지 않고 한 줄로 표시되도록 강제 */
+}
+
+.event-reward-btn:hover {
+    background: #2ecc71 !important;
+    color: #000 !important;
+    transform: scale(1.1);
+}
+
+.event-reward-btn.locked {
+    opacity: 0.3 !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.2) !important;
+    pointer-events: none;
+}
+
