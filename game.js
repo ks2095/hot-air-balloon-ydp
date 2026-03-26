@@ -101,6 +101,10 @@ const rankListEl = document.getElementById('rank-list');
 const rankNicknameInput = document.getElementById('rank-nickname');
 
 // Ad & Event selection elements
+const pianoContainer = document.getElementById('piano-container');
+const musicStaff = document.getElementById('music-staff');
+const musicScoreBoard = document.getElementById('music-score-board');
+const musicCreditsValEl = document.getElementById('music-credits-val');
 const adSelectionOverlay = document.getElementById('ad-selection-overlay');
 const adSelectLifeBtn = document.getElementById('ad-select-life-btn');
 const adSelectEventBtn = document.getElementById('ad-select-event-btn');
@@ -117,6 +121,23 @@ let isRewardedEventPlay = false; // 광고 시청 후 보상으로 하는 이벤
 let popcornGatheredScore = 0;
 let event4FishCaughtScore = 0;
 let popcornDepositTimer = null;
+
+// EVENT 6 Melody tracking 
+let currentEvent6Note = "do";
+let currentEvent6Score = 0;
+// Natural notes available for the staff
+const SCALE_NOTES = ["do", "re", "mi", "fa", "sol", "la", "si", "do2"];
+
+const NOTE_POSITIONS = {
+    'do': { bottom: -22, ledger: true },   // X=-15 
+    're': { bottom: -14, ledger: false },  // X=-7 ?
+    'mi': { bottom: -7, ledger: false },   // X=0 (Bottom Line)
+    'fa': { bottom: -1, ledger: false },   // X=6.25
+    'sol': { bottom: 6, ledger: false },   // X=12.5 (2nd Line)
+    'la': { bottom: 12, ledger: false },   // X=18.75
+    'si': { bottom: 18, ledger: false },   // X=25 (3rd Line)
+    'do2': { bottom: 24, ledger: false }   // X=31.25
+};
 
 let steak1Img = new Image();
 steak1Img.src = '스테이크1.png';
@@ -636,6 +657,14 @@ const LEVEL_CONFIGS = {
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    30: {
+        displayName: "EVENT 6",
+        winds: [-2, 2, -2, 2, -2, 0, 1],
+        maxGas: 400,
+        maxTime: 60,
+        platformY: 6.5,
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
@@ -1809,6 +1838,7 @@ function update(timestamp) {
             checkFishing();
             checkBirdCollisions();
             checkEagleCollisions();
+            checkPianoCollisions();
         }
         updateFish();
         updateBirds();
@@ -1871,9 +1901,13 @@ function update(timestamp) {
         if (gasValEl) gasValEl.innerText = Math.floor(currentMaxGas - gas);
         if (timeValEl) timeValEl.innerText = Math.floor(diffSeconds);
 
-        // 실패 조건 체크 (가스 0 또는 시간 종료)
+        // 실패 및 클리어 조건 체크
         if (timeLeft <= 0 || gas <= 0) {
-            gameOver(timeLeft <= 0 ? 'TIME OUT' : 'NO GAS');
+            if (timeLeft <= 0 && currentLevel === 30) {
+                if (gameState === 'PLAY') triggerEvent6WinSequence();
+            } else {
+                gameOver(timeLeft <= 0 ? 'TIME OUT' : 'NO GAS');
+            }
         }
 
         // 버너 버튼 색상 업데이트
@@ -1894,8 +1928,8 @@ function update(timestamp) {
 
 
 function updateTargetLine() {
-    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~28레벨 공통)
-    if (currentLevel >= 0 && currentLevel <= 28) {
+    // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~30레벨 공통)
+    if (currentLevel >= 0 && currentLevel <= 30) {
         if (currentLevel === 25 || currentLevel === 27) {
             // 레벨 21, 23: 좌측으로 이동 (속도 0.2)
             targetLineX -= 0.2;
@@ -1907,6 +1941,10 @@ function updateTargetLine() {
         } else if (currentLevel === 28) {
             // 레벨 24: 좌측으로 이동 (속도 0.15)
             targetLineX -= 0.15;
+            if (targetLineX < 0) targetLineX = 100;
+        } else if (currentLevel === 29) {
+            // 레벨 25: 좌측으로 이동 (속도 0.5)
+            targetLineX -= 0.5;
             if (targetLineX < 0) targetLineX = 100;
         } else {
             targetLineX = 50;
@@ -1968,7 +2006,9 @@ function handleMovement() {
         continuousBurnStartTime = 0;
     }
 
-    velY -= GRAVITY * activeGravityMultiplier;
+    let gravityForce = GRAVITY * activeGravityMultiplier;
+    if (LEVEL_CONFIGS[currentLevel]?.displayName === "EVENT 6") gravityForce *= 1.5;
+    velY -= gravityForce;
     velY *= FRICTION;
 
     // Limit upward speed
@@ -2001,7 +2041,7 @@ function handleMovement() {
 
     let windForce = ZONE_WINDS[zoneIndex];
     const currentDisplayName = LEVEL_CONFIGS[currentLevel]?.displayName;
-    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3") windForce *= level11WindMultiplier;
+    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3" && currentDisplayName !== "EVENT 6") windForce *= level11WindMultiplier;
     windForce += tempWindBoosts[zoneIndex];
 
     velX += windForce * 0.00165; // Reduced from 0.0033 (half of previous effect)
@@ -2020,7 +2060,7 @@ function handleMovement() {
     if (config.displayName === "9") pixelOffset = 7;
     if (config.displayName === "10") pixelOffset = -3;
     if (config.displayName === "19") pixelOffset = 2; // Lowered by 10px from 12
-    if (config.displayName === "EVENT 2" || config.displayName === "EVENT 3" || config.displayName === "EVENT 4") pixelOffset = 12 - 50; // 50px down
+    if (config.displayName === "EVENT 2" || config.displayName === "EVENT 3" || config.displayName === "EVENT 4" || config.displayName === "EVENT 6") pixelOffset = 12 - 50; // 50px down
     const targetYBottom = (100 / 7) * platformY + (pixelOffset / skyHeight) * 100; // Visual bottom of the platform
     const targetYTop = targetYBottom + platformHeightPercentage; // Top of the grass
 
@@ -2269,7 +2309,7 @@ function gameOver(msg = 'OVERHEAT') {
 
     // 11~20레벨 실패 시 바람 방향을 처음 시작 방향(multiplier=1)으로 복구
     const currentDisplayName = LEVEL_CONFIGS[currentLevel]?.displayName;
-    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3") {
+    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3" && currentDisplayName !== "EVENT 6") {
         level11WindMultiplier = 1;
         if (showWindLabels) updateWindLabels();
         if (windCountdownEl) windCountdownEl.classList.add('hidden');
@@ -2406,7 +2446,7 @@ function gameOver(msg = 'OVERHEAT') {
     let failScore = 0;
     if (isEvent2) {
         failScore = Math.floor(cookedPercentage * 2) * 10;
-    } else if (config && (config.displayName === "EVENT 1" || config.displayName === "EVENT 3")) {
+    } else if (config && (config.displayName === "EVENT 1" || config.displayName === "EVENT 3" || config.displayName === "EVENT 6")) {
         failScore = sessionEventCredits;
     } else if (config && config.displayName === "EVENT 4") {
         failScore = event4FishCaughtScore;
@@ -2425,7 +2465,7 @@ function winGame() {
     
     // 11~20레벨 클리어 시 바람 방향을 처음 시작 방향(multiplier=1)으로 복구
     const currentDisplayName = LEVEL_CONFIGS[currentLevel]?.displayName;
-    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3") {
+    if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3" && currentDisplayName !== "EVENT 6") {
         level11WindMultiplier = 1;
         if (showWindLabels) updateWindLabels();
         if (windCountdownEl) windCountdownEl.classList.add('hidden');
@@ -2544,7 +2584,7 @@ function winGame() {
     if (isEventLevel) {
         // Changed: Removed +200 clear bonus for rank
         const evtName = LEVEL_CONFIGS[currentLevel].displayName;
-        if(evtName === "EVENT 1" || evtName === "EVENT 3") scoreForRank += sessionEventCredits;
+        if(evtName === "EVENT 1" || evtName === "EVENT 3" || evtName === "EVENT 6") scoreForRank += sessionEventCredits;
         if(evtName === "EVENT 4") scoreForRank += event4FishCaughtScore;
     }
     saveLevelBestScore(scoreForRank);
@@ -2575,7 +2615,7 @@ function winGame() {
             // 이벤트 전용 데이터는 업데이트하되 창은 띄우지 않음
             if (eventResultScoreEl) {
                 let eventScore = 0;
-                if (currentDisplayName === "EVENT 1" || currentDisplayName === "EVENT 3") eventScore = sessionEventCredits;
+                if (currentDisplayName === "EVENT 1" || currentDisplayName === "EVENT 3" || currentDisplayName === "EVENT 6") eventScore = sessionEventCredits;
                 else if (currentDisplayName === "EVENT 4") eventScore = event4FishCaughtScore;
                 eventResultScoreEl.innerText = eventScore;
             }
@@ -2589,8 +2629,29 @@ function winGame() {
 
     updateNextLevelButtonVisibility();
 
+    // 벌룬 이미지가 터진 상태면 복구 (리셋용)
+    balloon.classList.remove('explosion');
+    balloon.style.opacity = "1";
+    balloon.style.transform = "translateX(-50%) scale(1)";
+
     soundMgr.play('success');
 
+}
+
+function triggerEvent6WinSequence() {
+    if (gameState !== 'PLAY') return;
+    gameState = 'CLEAR'; // 상태 중지
+    
+    // 폭발 효과음 재생
+    if (soundMgr.play) soundMgr.play('explosion');
+    
+    // 풍선 터지는 애니메이션 클래스 추가
+    balloon.classList.add('explosion');
+    
+    // 0.8초 후 실제 윈 게임 처리
+    setTimeout(() => {
+        winGame();
+    }, 800);
 }
 
 function createParticles() {
@@ -2702,7 +2763,7 @@ function animateParticles(timestamp) {
         
         let wind = ZONE_WINDS[p.zoneIndex];
         const currentDisplayName = LEVEL_CONFIGS[currentLevel]?.displayName;
-        if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3") wind *= level11WindMultiplier;
+        if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3" && currentDisplayName !== "EVENT 6") wind *= level11WindMultiplier;
         wind += tempWindBoosts[p.zoneIndex];
         p.el.style.width = `${Math.abs(wind) * 5 + 5}px`;
     });
@@ -2820,6 +2881,31 @@ function resetGame() {
         if (cornContainer) cornContainer.classList.add('hidden');
     }
 
+    // EVENT 6 전용: 피아노 건반 표시
+    if (config.displayName === "EVENT 6") {
+        if (pianoContainer) pianoContainer.classList.remove('hidden');
+    } else {
+        if (pianoContainer) pianoContainer.classList.add('hidden');
+    }
+
+    // EVENT 6 전용: 오선지 및 점수판 초기화
+    if (config.displayName === "EVENT 6") {
+        if (musicStaff) {
+            musicStaff.classList.remove('hidden');
+            musicStaff.style.left = '50%'; // 가운데 고정
+            currentEvent6Note = SCALE_NOTES[Math.floor(Math.random() * SCALE_NOTES.length)];
+            updateMelodyVisuals();
+        }
+        if (musicScoreBoard) {
+            musicScoreBoard.classList.remove('hidden');
+            if (musicCreditsValEl) musicCreditsValEl.innerText = '0';
+        }
+        currentEvent6Score = 0;
+    } else {
+        if (musicStaff) musicStaff.classList.add('hidden');
+        if (musicScoreBoard) musicScoreBoard.classList.add('hidden');
+    }
+
     console.log(`Resetting to Level ${currentLevel}`);
     savePlayerData();
 
@@ -2871,6 +2957,10 @@ function resetGame() {
             clearTimeout(popcornDepositTimer);
             popcornDepositTimer = null;
         }
+    } else if (config.displayName === "EVENT 6") {
+        sessionEventCredits = 0;
+        if (musicCreditsValEl) musicCreditsValEl.innerText = "0";
+        if (eventCreditsValEl) eventCreditsValEl.innerText = "0";
     } else if (config.displayName === "EVENT 2") {
         clearCoins();
         if (eventCounterEl) eventCounterEl.classList.add('hidden');
@@ -2906,16 +2996,15 @@ function resetGame() {
         clearFish();
     }
 
-    // Level 21, 22, 24: Bird Obstacles
-    // Level 21, 22: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26) {
+    // Level 21, 22, 25: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29) {
         createBirds();
     } else {
         clearBirds();
     }
 
-    // Level 23, 24: Eagle Obstacles
-    if (currentLevel === 27 || currentLevel === 28) {
+    // Level 23, 24, 25: Eagle Obstacles
+    if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29) {
         createEagles();
     } else {
         clearEagles();
@@ -3570,20 +3659,20 @@ function createBirds() {
         let birdX = Math.random() * 100;
         let birdY = zoneIdx * (110 / 7) + (Math.random() * 10);
 
-        // 레벨 21, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
-        if (currentLevel === 25 && zoneIdx === 1) {
+        // 레벨 21, 25, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 1) {
             birdVelX = -0.4; 
             birdX = 100; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 21, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
-        if (currentLevel === 25 && (zoneIdx === 2 || zoneIdx === 3)) {
+        // 레벨 21, 25, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29) && (zoneIdx === 2 || zoneIdx === 3)) {
             birdVelX = 0.4; 
             birdX = 0; 
             birdY = zoneIdx * (100 / 7);
         }
-        // 레벨 21, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
-        if (currentLevel === 25 && zoneIdx === 4) {
+        // 레벨 21, 25, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
+        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 4) {
             birdVelX = -0.5; 
             birdX = 100; 
             birdY = zoneIdx * (100 / 7);
@@ -3628,7 +3717,7 @@ function createBirds() {
         }
 
         // 레벨 23, 24, 2구역(zoneIdx 1) 붉은새는 우측벽면 중앙에서 아래로 40px 지점에서 출발 (속도 0.5 고정)
-        if ((currentLevel === 27 || currentLevel === 28 || currentLevel === 29) && zoneIdx === 1) {
+        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 1) {
             birdVelX = -0.5; // 고정 속도 0.5 (좌측 방향)
             birdX = 100; // 우측 벽면
             const skyHeight = gameContainer.clientHeight * 0.9195;
@@ -3642,13 +3731,13 @@ function createBirds() {
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
         // 레벨 24, 3구역(zoneIdx 2) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정, 우측 이동)
-        if ((currentLevel === 28 || currentLevel === 29) && zoneIdx === 2) {
+        if (currentLevel === 28 && zoneIdx === 2) {
             birdVelX = 0.3; 
             birdX = 0; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
         // 레벨 23, 24, 4구역(zoneIdx 3) 붉은새는 좌측벽면 중앙에서 출발 (속도 0.3 고정)
-        if ((currentLevel === 27 || currentLevel === 28 || currentLevel === 29) && zoneIdx === 3) {
+        if ((currentLevel === 27 || currentLevel === 28) && zoneIdx === 3) {
             birdVelX = 0.3; // 고정 속도 0.3 (우측 방향)
             birdX = 0; // 좌측 벽면
             birdY = (zoneIdx + 0.5) * (100 / 7); // 4구역 중앙 (약 50.0%)
@@ -3693,6 +3782,154 @@ function clearBirds() {
     activeBirds = [];
 }
 
+const activePianoKeys = new Set();
+function checkPianoCollisions() {
+    const config = LEVEL_CONFIGS[currentLevel];
+    if (!config || config.displayName !== "EVENT 6") return;
+
+    const skyHeight = gameContainer.clientHeight * 0.9195;
+    const skyWidth = gameContainer.clientWidth;
+
+    // Hitbox Circle (representing the blue center marker)
+    const markerBodyXPx = (balloonX / 100) * skyWidth;
+    // Y in screen coordinates (0 is top of container)
+    // balloonY=0 is bottom of sky area (8.05% from bottom of container)
+    const markerBottomOffset = 8.05; // %
+    const markerEffectiveY = markerBottomOffset + ((balloonY + getMarkerOffset()) * 0.9195);
+    const markerYPx_fromBottom = (markerEffectiveY / 100) * gameContainer.clientHeight;
+    const markerYPx = gameContainer.clientHeight - markerYPx_fromBottom;
+
+    const radius = 32.5 / 2;
+    // Red Dot position (the topmost point of the blue circle marker)
+    // In screen coordinates (0 is top), the topmost point is Y - radius
+    const dotXPx = markerBodyXPx;
+    const dotYPx = markerYPx - radius;
+
+    const keys = document.querySelectorAll('.key');
+    const gameRect = gameContainer.getBoundingClientRect();
+
+    const currentKeysInCollision = new Set();
+    keys.forEach(key => {
+        const rect = key.getBoundingClientRect();
+        const keyTop = rect.top - gameRect.top;
+        const keyBottom = rect.bottom - gameRect.top;
+        const keyLeft = rect.left - gameRect.left;
+        const keyRight = rect.right - gameRect.left;
+
+        // Point-in-Rect Collision (using the Red Dot point)
+        if (dotXPx >= keyLeft && dotXPx <= keyRight &&
+            dotYPx >= keyTop && dotYPx <= keyBottom) {
+            
+            currentKeysInCollision.add(key);
+            if (!activePianoKeys.has(key)) {
+                key.classList.add('pressed');
+                playPianoNote(key.dataset.note);
+
+                // EVENT 6 미션: 악보의 음을 치면 다음 음으로 (랜덤)
+                if (key.dataset.note === currentEvent6Note && musicStaff && !musicStaff.classList.contains('vanishing')) {
+                    triggerStaffMatchEffect();
+                }
+            }
+        }
+    });
+
+    // Remove highlight when collision ends
+    activePianoKeys.forEach(key => {
+        if (!currentKeysInCollision.has(key)) {
+            key.classList.remove('pressed');
+        }
+    });
+
+    // Update active set
+    activePianoKeys.clear();
+    currentKeysInCollision.forEach(k => activePianoKeys.add(k));
+}
+
+function triggerStaffMatchEffect() {
+    if (!musicStaff) return;
+    
+    // 점수 획득 (한 음당 100점)
+    sessionEventCredits += 100;
+    if (eventCounterEl) eventCreditsValEl.innerText = sessionEventCredits;
+    if (musicCreditsValEl) musicCreditsValEl.innerText = sessionEventCredits;
+    
+    // 이펙트 시작: 위로 솟구치며 투명해짐
+    musicStaff.classList.add('vanishing');
+    
+    setTimeout(() => {
+        musicStaff.classList.add('hidden');
+        musicStaff.classList.remove('vanishing');
+        
+        // 다음 랜덤 음표 선택
+        currentEvent6Note = SCALE_NOTES[Math.floor(Math.random() * SCALE_NOTES.length)];
+        updateMelodyVisuals();
+
+        // 0.3초 뒤에 다시 나타남 (가운데 고정)
+        setTimeout(() => {
+            musicStaff.classList.remove('hidden');
+        }, 300);
+    }, 500);
+}
+
+function updateMelodyVisuals() {
+    const note = currentEvent6Note;
+    const pos = NOTE_POSITIONS[note];
+    if (!pos) return;
+
+    const noteContainer = musicStaff.querySelector('.note-container');
+    const ledgerLine = musicStaff.querySelector('.ledger-line');
+
+    if (noteContainer) {
+        noteContainer.style.bottom = `${pos.bottom}px`;
+    }
+    if (ledgerLine) {
+        ledgerLine.style.display = pos.ledger ? 'block' : 'none';
+    }
+}
+
+let pianoAudioCtx = null;
+function playPianoNote(note) {
+    if (!pianoAudioCtx) {
+        pianoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Frequencies for C4 octave
+    const pianoFreqs = {
+        'do': 261.6, 'do-sharp': 277.2,
+        're': 293.7, 're-sharp': 311.1,
+        'mi': 329.6,
+        'fa': 349.2, 'fa-sharp': 370.0,
+        'sol': 392.0, 'sol-sharp': 415.3,
+        'la': 440.0, 'la-sharp': 466.2,
+        'si': 493.9, 'do2': 523.3
+    };
+    
+    const freq = pianoFreqs[note];
+    if (!freq) return;
+
+    if (pianoAudioCtx.state === 'suspended') {
+        pianoAudioCtx.resume();
+    }
+
+    const osc = pianoAudioCtx.createOscillator();
+    const gain = pianoAudioCtx.createGain();
+    
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, pianoAudioCtx.currentTime);
+    
+    // Piano-like envelope (quick attack, decaying sustain) - Lengthened to 2s
+    gain.gain.setValueAtTime(0, pianoAudioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.8, pianoAudioCtx.currentTime + 0.05); 
+    gain.gain.exponentialRampToValueAtTime(0.001, pianoAudioCtx.currentTime + 2.0); 
+    
+    osc.connect(gain);
+    gain.connect(pianoAudioCtx.destination);
+    
+    osc.start();
+    osc.stop(pianoAudioCtx.currentTime + 2.0);
+}
+
+
 function checkBirdCollisions() {
     if (gameState !== 'PLAY') return;
     if (isStunned && Date.now() < stunEndTime) return; // 이미 부딪힌 상태면 무시
@@ -3730,9 +3967,9 @@ function checkBirdCollisions() {
         const combinedBasketRadiusSq = Math.pow(basketRadius + birdRadius, 2);
 
         if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
-            // 21, 22레벨에서는 즉시 폭발
+            // 21, 22, 25레벨에서는 즉시 폭발
             const config = LEVEL_CONFIGS[currentLevel];
-            if (config && (config.displayName === "21" || config.displayName === "22")) {
+            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25")) {
                 gameOver('CRASH');
                 return;
             }
@@ -3813,7 +4050,7 @@ function createEagles() {
                 targetY = 100;
             }
             
-            const baseSpeed = (config.displayName === "23" || config.displayName === "25") ? 0.3 : 0.25; // 23, 25레벨 독수리 속도 20% 상향 (0.25 -> 0.3)
+            const baseSpeed = (config.displayName === "23") ? 0.3 : 0.25; // 23레벨 독수리 속도 20% 상향 (0.25 -> 0.3)
             const dx = targetX - startX;
             const dy = targetY - startY;
             const dist = Math.sqrt(dx * dx + dy * dy);
