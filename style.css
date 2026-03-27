@@ -1894,7 +1894,7 @@ button:hover {
 /* EVENT 6 Piano */
 #piano-container {
     position: absolute;
-    bottom: calc(8.05% + (91.95% / 7) * 1 + 30px); /* Adjusted: +30px offset from bottom of Zone 2 */
+    bottom: calc(8.05% + (91.95% / 7) * 1 + 20px); /* Adjusted: +20px offset from bottom of Zone 2 */
     left: 50%;
     transform: translateX(-50%);
     width: 85%; /* Slightly reduced width for 7 keys for better margin */
@@ -1970,7 +1970,7 @@ button:hover {
     justify-content: space-between;
     z-index: 5;
     pointer-events: none;
-    transition: transform 0.5s ease-out, opacity 0.5s ease-out, left 0.3s ease-out;
+    transition: transform 0.25s ease-out, opacity 0.25s ease-out, left 0.3s ease-out;
 }
 
 #music-staff.vanishing {

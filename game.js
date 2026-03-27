@@ -123,20 +123,40 @@ let event4FishCaughtScore = 0;
 let popcornDepositTimer = null;
 
 // EVENT 6 Melody tracking 
+const EVENT6_MELODY_1 = ["do", "mi", "sol", "do", "mi", "sol", "la", "la", "la", "sol", "fa", "fa", "fa", "mi", "mi", "mi", "re", "re", "re", "do"];
+const EVENT6_MELODY_2 = [
+    "do", "do", "sol", "sol", "la", "la", "sol",
+    "fa", "fa", "mi", "mi", "re", "re", "do",
+    "sol", "sol", "fa", "fa", "mi", "mi", "re",
+    "sol", "sol", "fa", "fa", "mi", "mi", "re",
+    "do", "do", "sol", "sol", "la", "la", "sol",
+    "fa", "fa", "mi", "mi", "re", "re", "do"
+];
+const EVENT6_MELODY_3 = [
+    "do", "do", "do", "re", "mi",
+    "mi", "re", "mi", "fa", "sol",
+    "do2", "do2", "do2", "sol", "sol",
+    "mi", "mi", "mi", "do", "do",
+    "sol", "fa", "mi", "re", "do"
+];
+const EVENT6_MELODIES = [EVENT6_MELODY_1, EVENT6_MELODY_2, EVENT6_MELODY_3];
+let currentEvent6Melody = EVENT6_MELODY_1;
+let currentEvent6NoteIndex = 0;
 let currentEvent6Note = "do";
 let currentEvent6Score = 0;
+
 // Natural notes available for the staff
 const SCALE_NOTES = ["do", "re", "mi", "fa", "sol", "la", "si", "do2"];
 
 const NOTE_POSITIONS = {
-    'do': { bottom: -22, ledger: true },   // X=-15 
-    're': { bottom: -14, ledger: false },  // X=-7 ?
-    'mi': { bottom: -7, ledger: false },   // X=0 (Bottom Line)
-    'fa': { bottom: -1, ledger: false },   // X=6.25
-    'sol': { bottom: 6, ledger: false },   // X=12.5 (2nd Line)
-    'la': { bottom: 12, ledger: false },   // X=18.75
-    'si': { bottom: 18, ledger: false },   // X=25 (3rd Line)
-    'do2': { bottom: 24, ledger: false }   // X=31.25
+    'do': { bottom: -22, ledger: true },
+    're': { bottom: -14, ledger: false },
+    'mi': { bottom: -7, ledger: false },
+    'fa': { bottom: -1, ledger: false },
+    'sol': { bottom: 6, ledger: false },
+    'la': { bottom: 12, ledger: false },
+    'si': { bottom: 18, ledger: false },
+    'do2': { bottom: 24, ledger: false }
 };
 
 let steak1Img = new Image();
@@ -660,7 +680,7 @@ const LEVEL_CONFIGS = {
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     },
     30: {
-        displayName: "EVENT 6",
+        displayName: "EVENT 5",
         winds: [-2, 2, -2, 2, -2, 0, 1],
         maxGas: 400,
         maxTime: 60,
@@ -2007,7 +2027,6 @@ function handleMovement() {
     }
 
     let gravityForce = GRAVITY * activeGravityMultiplier;
-    if (LEVEL_CONFIGS[currentLevel]?.displayName === "EVENT 6") gravityForce *= 1.5;
     velY -= gravityForce;
     velY *= FRICTION;
 
@@ -2881,19 +2900,24 @@ function resetGame() {
         if (cornContainer) cornContainer.classList.add('hidden');
     }
 
-    // EVENT 6 전용: 피아노 건반 표시
-    if (config.displayName === "EVENT 6") {
+    // EVENT 5 전용: 피아노 건반 표시
+    if (config.displayName === "EVENT 5") {
         if (pianoContainer) pianoContainer.classList.remove('hidden');
     } else {
         if (pianoContainer) pianoContainer.classList.add('hidden');
     }
 
-    // EVENT 6 전용: 오선지 및 점수판 초기화
-    if (config.displayName === "EVENT 6") {
+    // EVENT 5 전용: 오선지 및 점수판 초기화
+    if (config.displayName === "EVENT 5") {
         if (musicStaff) {
             musicStaff.classList.remove('hidden');
             musicStaff.style.left = '50%'; // 가운데 고정
-            currentEvent6Note = SCALE_NOTES[Math.floor(Math.random() * SCALE_NOTES.length)];
+            
+            // 멜로디 1, 2, 3 중 하나 랜덤 선택
+            currentEvent6Melody = EVENT6_MELODIES[Math.floor(Math.random() * EVENT6_MELODIES.length)];
+            currentEvent6NoteIndex = 0;
+            currentEvent6Note = currentEvent6Melody[currentEvent6NoteIndex];
+            
             updateMelodyVisuals();
         }
         if (musicScoreBoard) {
@@ -2957,7 +2981,7 @@ function resetGame() {
             clearTimeout(popcornDepositTimer);
             popcornDepositTimer = null;
         }
-    } else if (config.displayName === "EVENT 6") {
+    } else if (config.displayName === "EVENT 5") {
         sessionEventCredits = 0;
         if (musicCreditsValEl) musicCreditsValEl.innerText = "0";
         if (eventCreditsValEl) eventCreditsValEl.innerText = "0";
@@ -3785,7 +3809,7 @@ function clearBirds() {
 const activePianoKeys = new Set();
 function checkPianoCollisions() {
     const config = LEVEL_CONFIGS[currentLevel];
-    if (!config || config.displayName !== "EVENT 6") return;
+    if (!config || config.displayName !== "EVENT 5") return;
 
     const skyHeight = gameContainer.clientHeight * 0.9195;
     const skyWidth = gameContainer.clientWidth;
@@ -3816,8 +3840,8 @@ function checkPianoCollisions() {
         const keyLeft = rect.left - gameRect.left;
         const keyRight = rect.right - gameRect.left;
 
-        // Point-in-Rect Collision (using the Red Dot point)
-        if (dotXPx >= keyLeft && dotXPx <= keyRight &&
+        // Point-in-Rect Collision (using the Red Dot point) - Only works when burning
+        if (isBurning && dotXPx >= keyLeft && dotXPx <= keyRight &&
             dotYPx >= keyTop && dotYPx <= keyBottom) {
             
             currentKeysInCollision.add(key);
@@ -3860,15 +3884,20 @@ function triggerStaffMatchEffect() {
         musicStaff.classList.add('hidden');
         musicStaff.classList.remove('vanishing');
         
-        // 다음 랜덤 음표 선택
-        currentEvent6Note = SCALE_NOTES[Math.floor(Math.random() * SCALE_NOTES.length)];
+        // 다음 음표 선택 (멜로디 시퀀스 진행)
+        currentEvent6NoteIndex++;
+        if (currentEvent6NoteIndex >= currentEvent6Melody.length) {
+            currentEvent6NoteIndex = 0; // 끝까지 가면 다시 처음부터
+        }
+        currentEvent6Note = currentEvent6Melody[currentEvent6NoteIndex];
+        
         updateMelodyVisuals();
 
-        // 0.3초 뒤에 다시 나타남 (가운데 고정)
+        // 0.15초 뒤에 다시 나타남 (가운데 고정)
         setTimeout(() => {
             musicStaff.classList.remove('hidden');
-        }, 300);
-    }, 500);
+        }, 150);
+    }, 250);
 }
 
 function updateMelodyVisuals() {
@@ -4405,7 +4434,7 @@ if (adSelectLifeBtn) {
             return;
         }
         adSelectionOverlay.classList.add('hidden');
-        showAd('life', 20);
+        showAd('life', 30);
     });
 }
 
@@ -4423,7 +4452,7 @@ if (adSelectEventBtn) {
         }
 
         adSelectionOverlay.classList.add('hidden');
-        showAd('event', 20);
+        showAd('event', 30);
     });
 }
 
@@ -4464,6 +4493,12 @@ function showAd(type, duration) {
                 if (type === 'life') {
                     if (getLifeAdBtn) getLifeAdBtn.classList.remove('hidden');
                 } else {
+                    // Reward for event ad: 1 life + event game selection
+                    lives = Math.min(7, lives + 1);
+                    savePlayerData();
+                    updateLivesUI();
+                    triggerLifeSparkle();
+
                     if (adEventRewardsEl) {
                         adEventRewardsEl.classList.remove('hidden');
                         // 클리어 여부에 따라 버튼 활성화/비활성화
