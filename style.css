@@ -2951,3 +2951,14 @@ button:hover {
     pointer-events: none;
 }
 
+/* Cloud boundary guidelines for Level 26 */
+.level26-cloud-guide {
+    position: absolute;
+    border: 2px dashed rgba(255, 211, 42, 0.8);
+    background: rgba(255, 211, 42, 0.05);
+    pointer-events: none;
+    z-index: 20;
+    box-shadow: 0 0 10px rgba(255, 211, 42, 0.3);
+}
+
+

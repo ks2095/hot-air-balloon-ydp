@@ -673,7 +673,7 @@ const LEVEL_CONFIGS = {
     },
     29: {
         displayName: "25",
-        winds: [2, -4.75, 2, -4.75, 3, -3, 3],
+        winds: [2, -4.75, 2, -4.75, 3, -2, 3],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
@@ -685,6 +685,14 @@ const LEVEL_CONFIGS = {
         maxGas: 400,
         maxTime: 60,
         platformY: 6.5,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    31: {
+        displayName: "26",
+        winds: [2, -4.75, 2, -4.75, 3, -3, 3],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
@@ -743,6 +751,7 @@ let stunEndTime = 0; // 스턴 종료 시간
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
 const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
+const BONUS_G4_LEVELS = ["26"];
 
 function getTotalItemsCount() {
     let total = 0;
@@ -1599,7 +1608,7 @@ function updateStoreUI(isInventoryMode = false) {
             const itemDiv = document.createElement('div');
             itemDiv.className = `store-mini-item item-${key}`;
             if (isInventoryMode) {
-                const allItemLevels = [...BONUS_G1_LEVELS, ...BONUS_G2_LEVELS];
+                const allItemLevels = [...BONUS_G1_LEVELS, ...BONUS_G2_LEVELS, ...BONUS_G4_LEVELS];
                 let isItemDisabled = (count === 0);
 
                 // 아이템 미션이 없는 레벨이라면 비활성화
@@ -1611,6 +1620,10 @@ function updateStoreUI(isInventoryMode = false) {
                     }
                 } else if (BONUS_G2_LEVELS.includes(displayName)) {
                     if (droppedItems.length >= 2) {
+                        isItemDisabled = true;
+                    }
+                } else if (BONUS_G4_LEVELS.includes(displayName)) {
+                    if (droppedItems.length >= 4) {
                         isItemDisabled = true;
                     }
                 }
@@ -1692,6 +1705,8 @@ function updateStoreUI(isInventoryMode = false) {
                         if (droppedItems.length >= 1) return;
                     } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
+                    } else if (BONUS_G4_LEVELS.includes(displayName)) {
+                        if (droppedItems.length >= 4) return;
                     } else {
                         // 아이템 미션이 없는 레벨
                         return;
@@ -1708,6 +1723,8 @@ function updateStoreUI(isInventoryMode = false) {
                         if (droppedItems.length >= 1) return;
                     } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
+                    } else if (BONUS_G4_LEVELS.includes(displayName)) {
+                        if (droppedItems.length >= 4) return;
                     } else {
                         // 아이템 미션이 없는 레벨
                         return;
@@ -1949,7 +1966,7 @@ function update(timestamp) {
 
 function updateTargetLine() {
     // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~30레벨 공통)
-    if (currentLevel >= 0 && currentLevel <= 30) {
+    if (currentLevel >= 0 && currentLevel <= 31) {
         if (currentLevel === 25 || currentLevel === 27) {
             // 레벨 21, 23: 좌측으로 이동 (속도 0.2)
             targetLineX -= 0.2;
@@ -1963,8 +1980,8 @@ function updateTargetLine() {
             targetLineX -= 0.15;
             if (targetLineX < 0) targetLineX = 100;
         } else if (currentLevel === 29) {
-            // 레벨 25: 좌측으로 이동 (속도 0.5)
-            targetLineX -= 0.5;
+            // 레벨 25: 좌측으로 이동 (속도 0.4)
+            targetLineX -= 0.4;
             if (targetLineX < 0) targetLineX = 100;
         } else {
             targetLineX = 50;
@@ -2037,6 +2054,11 @@ function handleMovement() {
     }
     if (velY > effectiveMaxUpwardVel) velY = effectiveMaxUpwardVel;
 
+    // Horizontal logic (Wind triggered by the center marker dot) & Cloud logic
+    const skyHeight = gameContainer.clientHeight * 0.9195;
+    const markerOffsetPercentage = (79 / skyHeight) * 100;
+    let markerY = balloonY + markerOffsetPercentage;
+
     let movementScale = 0.2;
     if (isStunned) {
         if (Date.now() < stunEndTime) {
@@ -2048,12 +2070,10 @@ function handleMovement() {
         }
     }
 
-    balloonY += velY * movementScale; // Scaling factor for smoothness
+    let velMultiplier = 1.0;
+    if (isInsideLevel26Cloud(balloonX, markerY)) velMultiplier = 0.25;
 
-    // Horizontal logic (Wind triggered by the center marker dot)
-    const skyHeight = gameContainer.clientHeight * 0.9195;
-    const markerOffsetPercentage = (79 / skyHeight) * 100;
-    let markerY = balloonY + markerOffsetPercentage;
+    balloonY += velY * movementScale * velMultiplier; // Scaling factor for smoothness
 
     const zoneHeight = 100 / 7;
     const zoneIndex = Math.min(6, Math.max(0, Math.floor(markerY / zoneHeight)));
@@ -2063,13 +2083,14 @@ function handleMovement() {
     if (currentLevel >= 13 && currentLevel <= 23 && currentDisplayName !== "EVENT 3" && currentDisplayName !== "EVENT 6") windForce *= level11WindMultiplier;
     windForce += tempWindBoosts[zoneIndex];
 
-    velX += windForce * 0.00165; // Reduced from 0.0033 (half of previous effect)
+    velX += windForce * 0.00165; 
     velX *= FRICTION;
 
     let finalVelX = velX;
     if (isStunned) finalVelX *= 0.5; // 가로 속도도 50% 감소
 
-    balloonX += finalVelX;
+    balloonX += finalVelX * velMultiplier;
+
 
     // Platform Dimensions
     const platformHeightPercentage = (9 / skyHeight) * 100;
@@ -2536,6 +2557,13 @@ function winGame() {
         } else {
             itemBonus = 0;
         }
+    } else if (BONUS_G4_LEVELS.includes(currentDisplayName)) {
+        // Group 4 (Level 26): 0개 800점, 1개 600점, 2개 400점, 3개 200점, 4개 이상 0점
+        if (actualItemsDecreased === 0) itemBonus = 800;
+        else if (actualItemsDecreased === 1) itemBonus = 600;
+        else if (actualItemsDecreased === 2) itemBonus = 400;
+        else if (actualItemsDecreased === 3) itemBonus = 200;
+        else itemBonus = 0;
     }
 
     if (itemBonus > 0) {
@@ -3020,18 +3048,25 @@ function resetGame() {
         clearFish();
     }
 
-    // Level 21, 22, 25: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29) {
+    // Level 21, 22, 25, 26: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29 || currentLevel === 31) {
         createBirds();
     } else {
         clearBirds();
     }
 
-    // Level 23, 24, 25: Eagle Obstacles
+    // Level 23, 24, 25: Eagle Obstacles (Level 26 removed)
     if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29) {
         createEagles();
     } else {
         clearEagles();
+    }
+
+    // Level 26: Cloud decoration in Zone 4
+    if (currentLevel === 31) {
+        addLevel26Cloud();
+    } else {
+        removeLevel26Cloud();
     }
 
     attachedFish = null;
@@ -3049,6 +3084,9 @@ function resetGame() {
         } else if (BONUS_G2_LEVELS.includes(displayName)) {
             levelHintEl.innerHTML = `Use 2 items or less`;
             levelHintEl.classList.remove('hidden');
+        } else if (BONUS_G4_LEVELS.includes(displayName)) {
+            levelHintEl.innerHTML = `Use 4 items or less`;
+            levelHintEl.classList.remove('hidden');
         } else {
             levelHintEl.classList.add('hidden');
         }
@@ -3064,6 +3102,86 @@ function resetGame() {
             levelHintEl.style.position = 'absolute';
         }
     }
+}
+
+
+function addLevel26Cloud() {
+    removeLevel26Cloud();
+    
+    // 하단 구름 이미지 생성 (1구역 유지, 3 & 6구역 제거)
+    const imageZones = ['zone-1'];
+    imageZones.forEach(zoneId => {
+        const targetZone = document.getElementById(zoneId);
+        if (targetZone) {
+            const cloud = document.createElement('img');
+            cloud.src = '구름1.png';
+            cloud.className = 'level26-cloud';
+            cloud.style.position = 'absolute';
+            cloud.style.left = '50%';
+            cloud.style.bottom = 'calc(20% - 20px)';
+            cloud.style.width = '384px';
+            cloud.style.height = 'auto';
+            cloud.style.transform = 'translateX(-50%)';
+            cloud.style.zIndex = '15';
+            cloud.style.opacity = '0.4';
+            cloud.style.pointerEvents = 'none';
+            targetZone.appendChild(cloud);
+        }
+    });
+
+    // 노란색 구역(가이드 및 물리 판정 영역) 생성 부분은 사용자의 요청에 의해 시각화 제외
+    // (물리 판정 로직인 isInsideLevel26Cloud은 그대로 유지됨)
+}
+
+
+
+
+function removeLevel26Cloud() {
+    document.querySelectorAll('.level26-cloud, .level26-cloud-guide, .level26-cloud-guide-svg').forEach(c => c.remove());
+}
+
+function isInsideLevel26Cloud(x, y) {
+    if (currentLevel !== 31) return false;
+    
+    const skyWidth = gameContainer.clientWidth;
+    const cloudWidthPct = (384 / skyWidth) * 100;
+    const halfWidth = cloudWidthPct / 2;
+    
+    // X축 체크 (384px 너비)
+    if (x < 50 - halfWidth || x > 50 + halfWidth) return false;
+
+    const zoneHeight = 100 / 7;
+    const zones = [1]; // 하단 구름만 남김 (2구역 - 기존 idx 1)
+    const skyHeight = gameContainer.clientHeight * 0.9195;
+    const pixel35InGameUnits = (35 / skyHeight) * 100;
+    
+    const slantFactorRight = Math.tan(20 * Math.PI / 180);
+    const slantFactorLeft = Math.tan(15 * Math.PI / 180);
+
+    for (const z of zones) {
+        const zoneBottom = z * zoneHeight;
+        const baseZoneTop = (z + 1) * zoneHeight + 2; 
+
+        // 상단 경계값 (x > 50이면 20도, x < 50이면 15도 하단으로 기울어짐)
+        let currentTop = baseZoneTop;
+        if (x > 50) {
+            const dxPixels = (x - 50) / 100 * skyWidth;
+            const dyPixels = dxPixels * slantFactorRight;
+            const dyGameUnits = (dyPixels / skyHeight) * 100;
+            currentTop -= dyGameUnits;
+        } else if (x < 50) {
+            const dxPixels = (50 - x) / 100 * skyWidth;
+            const dyPixels = dxPixels * slantFactorLeft;
+            const dyGameUnits = (dyPixels / skyHeight) * 100;
+            currentTop -= dyGameUnits;
+        }
+
+        if (y >= zoneBottom - 2 + pixel35InGameUnits && y <= currentTop) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 
@@ -3683,20 +3801,20 @@ function createBirds() {
         let birdX = Math.random() * 100;
         let birdY = zoneIdx * (110 / 7) + (Math.random() * 10);
 
-        // 레벨 21, 25, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
-        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 1) {
+        // 레벨 21, 25, 26, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 31) && zoneIdx === 1) {
             birdVelX = -0.4; 
             birdX = 100; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 21, 25, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
-        if ((currentLevel === 25 || currentLevel === 29) && (zoneIdx === 2 || zoneIdx === 3)) {
+        // 레벨 21, 25, 26, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 31) && (zoneIdx === 2 || zoneIdx === 3)) {
             birdVelX = 0.4; 
             birdX = 0; 
             birdY = zoneIdx * (100 / 7);
         }
-        // 레벨 21, 25, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
-        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 4) {
+        // 레벨 21, 25, 26, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 31) && zoneIdx === 4) {
             birdVelX = -0.5; 
             birdX = 100; 
             birdY = zoneIdx * (100 / 7);
@@ -3782,7 +3900,10 @@ function createBirds() {
 function updateBirds() {
     const now = performance.now();
     activeBirds.forEach(bird => {
-        bird.x += bird.velX;
+        let velMultiplier = 1.0;
+        if (isInsideLevel26Cloud(bird.x, bird.y)) velMultiplier = 0.25;
+        
+        bird.x += bird.velX * velMultiplier;
         
         // Wrap around
         if (bird.x > 110) bird.x = -10;
@@ -3874,6 +3995,17 @@ function triggerStaffMatchEffect() {
     
     // 점수 획득 (한 음당 100점)
     sessionEventCredits += 100;
+    
+    // 첫 클리어이거나 광고 보상 플레이일 때 토탈 크레딧 합산
+    if (shouldAllowEventCredits()) {
+        totalCredits += 100;
+        recordEventCreditGain();
+        if (totalCreditsEl) totalCreditsEl.innerText = totalCredits;
+        const groundCredits = document.getElementById('ground-credits-display');
+        if (groundCredits) groundCredits.innerText = `${totalCredits}C`;
+        savePlayerData();
+    }
+
     if (eventCounterEl) eventCreditsValEl.innerText = sessionEventCredits;
     if (musicCreditsValEl) musicCreditsValEl.innerText = sessionEventCredits;
     
@@ -3998,7 +4130,7 @@ function checkBirdCollisions() {
         if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
             // 21, 22, 25레벨에서는 즉시 폭발
             const config = LEVEL_CONFIGS[currentLevel];
-            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25")) {
+            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25" || config.displayName === "26")) {
                 gameOver('CRASH');
                 return;
             }
@@ -4033,10 +4165,11 @@ function createEagles() {
     const isLevel23 = config && config.displayName === "23";
     const isLevel24 = config && config.displayName === "24";
     const isLevel25 = config && config.displayName === "25";
-    const isSpecialPatternLevel = isLevel23 || isLevel24 || isLevel25;
+    const isLevel26 = config && config.displayName === "26";
+    const isSpecialPatternLevel = isLevel23 || isLevel24 || isLevel25 || isLevel26;
 
-    // 23, 24레벨은 4마리 배치, 그 외 레벨은 1마리
-    const eagleCount = (isLevel23 || isLevel24 || isLevel25) ? 4 : 1;
+    // 23, 24, 25, 26레벨은 4마리 배치, 그 외 레벨은 1마리
+    const eagleCount = (isLevel23 || isLevel24 || isLevel25 || isLevel26) ? 4 : 1;
     for (let i = 0; i < eagleCount; i++) {
         const eagleEl = document.createElement('img');
         eagleEl.src = '독수리.png';
@@ -4129,8 +4262,11 @@ function updateEagles() {
             }
         }
 
-        eagle.x += eagle.velX;
-        eagle.y += eagle.velY;
+        let velMultiplier = 1.0;
+        if (isInsideLevel26Cloud(eagle.x, eagle.y)) velMultiplier = 0.25;
+
+        eagle.x += eagle.velX * velMultiplier;
+        eagle.y += eagle.velY * velMultiplier;
         
         // 반사 로직 (같은 반사각으로 이동)
         // 좌우 벽면 반사
@@ -4783,4 +4919,100 @@ if (submitRankBtn) {
         }
     });
 }
+
+// ================= 개발자용 구름 그리기 모드 (Ctrl + B) ================= //
+let isDrawingMode = false;
+let isDrawingDown = false;
+let lastDrawX = 0;
+let lastDrawY = 0;
+let drawCanvas = null;
+let drawCtx = null;
+
+function initDrawCanvas() {
+    if (!drawCanvas) {
+        drawCanvas = document.createElement('canvas');
+        drawCanvas.id = 'debug-draw-canvas';
+        drawCanvas.style.position = 'absolute';
+        drawCanvas.style.top = '0';
+        drawCanvas.style.left = '0';
+        drawCanvas.style.width = '100%';
+        drawCanvas.style.height = '100.0%';
+        drawCanvas.style.zIndex = '10000';
+        drawCanvas.style.pointerEvents = 'none';
+        gameContainer.appendChild(drawCanvas);
+    }
+    
+    const rect = gameContainer.getBoundingClientRect();
+    drawCanvas.width = rect.width;
+    drawCanvas.height = rect.height;
+    
+    drawCtx = drawCanvas.getContext('2d');
+    drawCtx.strokeStyle = '#ff0000';
+    drawCtx.lineWidth = 3;
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+}
+
+window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        isDrawingMode = !isDrawingMode;
+        console.log(`[Drawing Mode] ${isDrawingMode ? 'ON (Freehand)' : 'OFF'}`);
+        
+        if (isDrawingMode) {
+            initDrawCanvas();
+            drawCanvas.style.pointerEvents = 'auto';
+            gameContainer.style.cursor = 'crosshair';
+            alert("그리기 모드 ON (마우스를 누른 채 움직여 선을 그리세요 / 'C'를 누르면 지워집니다)");
+        } else {
+            if (drawCanvas) {
+                drawCanvas.style.pointerEvents = 'none';
+                gameContainer.style.cursor = 'default';
+            }
+        }
+    }
+    
+    // C 키를 누르면 선 지우기
+    if (isDrawingMode && (e.key === 'c' || e.key === 'C')) {
+        if (drawCtx) drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    }
+});
+
+if (gameContainer) {
+    gameContainer.addEventListener('mousedown', (e) => {
+        if (!isDrawingMode) return;
+        isDrawingDown = true;
+        const rect = gameContainer.getBoundingClientRect();
+        lastDrawX = e.clientX - rect.left;
+        lastDrawY = e.clientY - rect.top;
+        
+        // 클릭 지점 좌표 로그 출력
+        const xPc = (lastDrawX / rect.width) * 100;
+        const yPc = ((rect.bottom - e.clientY) / rect.height) * 100;
+        const zoneIdx = Math.floor(yPc / (100 / 7)) + 1;
+        console.log(`[Draw Start] Zone: ${zoneIdx}, X: ${xPc.toFixed(2)}%, Y: ${yPc.toFixed(2)}%`);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDrawingMode || !isDrawingDown) return;
+        const rect = gameContainer.getBoundingClientRect();
+        const curX = e.clientX - rect.left;
+        const curY = e.clientY - rect.top;
+        
+        if (drawCtx) {
+            drawCtx.beginPath();
+            drawCtx.moveTo(lastDrawX, lastDrawY);
+            drawCtx.lineTo(curX, curY);
+            drawCtx.stroke();
+        }
+        
+        lastDrawX = curX;
+        lastDrawY = curY;
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDrawingDown = false;
+    });
+}
+// ================================================================= //
 
