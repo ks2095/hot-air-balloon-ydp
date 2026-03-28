@@ -3143,6 +3143,9 @@ function addLevel26Cloud() {
         cloud.style.zIndex = '15';
         cloud.style.opacity = '0.4';
         cloud.style.pointerEvents = 'none';
+        cloud.style.maxWidth = 'none';  // 스마트폰 등 소형 화면에서 이미지 크기 제한 방지
+        cloud.style.maxHeight = 'none';
+        cloud.style.objectFit = 'fill'; // 정확한 백분율 크기에 맞춰 늘어남
         skyBg.appendChild(cloud);
     }
 
