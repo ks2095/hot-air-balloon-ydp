@@ -751,7 +751,7 @@ let stunEndTime = 0; // 스턴 종료 시간
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
 const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
-const BONUS_G4_LEVELS = ["26"];
+const BONUS_G3_LEVELS = ["26"];
 
 function getTotalItemsCount() {
     let total = 0;
@@ -1608,7 +1608,7 @@ function updateStoreUI(isInventoryMode = false) {
             const itemDiv = document.createElement('div');
             itemDiv.className = `store-mini-item item-${key}`;
             if (isInventoryMode) {
-                const allItemLevels = [...BONUS_G1_LEVELS, ...BONUS_G2_LEVELS, ...BONUS_G4_LEVELS];
+                const allItemLevels = [...BONUS_G1_LEVELS, ...BONUS_G2_LEVELS, ...BONUS_G3_LEVELS];
                 let isItemDisabled = (count === 0);
 
                 // 아이템 미션이 없는 레벨이라면 비활성화
@@ -1622,8 +1622,8 @@ function updateStoreUI(isInventoryMode = false) {
                     if (droppedItems.length >= 2) {
                         isItemDisabled = true;
                     }
-                } else if (BONUS_G4_LEVELS.includes(displayName)) {
-                    if (droppedItems.length >= 4) {
+                } else if (BONUS_G3_LEVELS.includes(displayName)) {
+                    if (droppedItems.length >= 3) {
                         isItemDisabled = true;
                     }
                 }
@@ -1705,8 +1705,8 @@ function updateStoreUI(isInventoryMode = false) {
                         if (droppedItems.length >= 1) return;
                     } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
-                    } else if (BONUS_G4_LEVELS.includes(displayName)) {
-                        if (droppedItems.length >= 4) return;
+                    } else if (BONUS_G3_LEVELS.includes(displayName)) {
+                        if (droppedItems.length >= 3) return;
                     } else {
                         // 아이템 미션이 없는 레벨
                         return;
@@ -1967,8 +1967,8 @@ function update(timestamp) {
 function updateTargetLine() {
     // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~30레벨 공통)
     if (currentLevel >= 0 && currentLevel <= 31) {
-        if (currentLevel === 25 || currentLevel === 27) {
-            // 레벨 21, 23: 좌측으로 이동 (속도 0.2)
+        if (currentLevel === 25 || currentLevel === 27 || currentLevel === 31) {
+            // 레벨 21, 23, 26: 좌측으로 이동 (속도 0.2)
             targetLineX -= 0.2;
             if (targetLineX < 0) targetLineX = 100;
         } else if (currentLevel === 26) {
@@ -2557,12 +2557,11 @@ function winGame() {
         } else {
             itemBonus = 0;
         }
-    } else if (BONUS_G4_LEVELS.includes(currentDisplayName)) {
-        // Group 4 (Level 26): 0개 800점, 1개 600점, 2개 400점, 3개 200점, 4개 이상 0점
-        if (actualItemsDecreased === 0) itemBonus = 800;
-        else if (actualItemsDecreased === 1) itemBonus = 600;
-        else if (actualItemsDecreased === 2) itemBonus = 400;
-        else if (actualItemsDecreased === 3) itemBonus = 200;
+    } else if (BONUS_G3_LEVELS.includes(currentDisplayName)) {
+        // Group 3 (Level 26): 0개 600점, 1개 400점, 2개 200점, 3개 이상 0점
+        if (actualItemsDecreased === 0) itemBonus = 600;
+        else if (actualItemsDecreased === 1) itemBonus = 400;
+        else if (actualItemsDecreased === 2) itemBonus = 200;
         else itemBonus = 0;
     }
 
@@ -3084,8 +3083,8 @@ function resetGame() {
         } else if (BONUS_G2_LEVELS.includes(displayName)) {
             levelHintEl.innerHTML = `Use 2 items or less`;
             levelHintEl.classList.remove('hidden');
-        } else if (BONUS_G4_LEVELS.includes(displayName)) {
-            levelHintEl.innerHTML = `Use 4 items or less`;
+        } else if (BONUS_G3_LEVELS.includes(displayName)) {
+            levelHintEl.innerHTML = `Use 3 items or less`;
             levelHintEl.classList.remove('hidden');
         } else {
             levelHintEl.classList.add('hidden');
@@ -3108,7 +3107,7 @@ function resetGame() {
 function addLevel26Cloud() {
     removeLevel26Cloud();
     
-    // 하단 구름 이미지 생성 (1구역 유지, 3 & 6구역 제거)
+    // 1. 하단 구름 이미지 생성 (시각적 장식)
     const imageZones = ['zone-1'];
     imageZones.forEach(zoneId => {
         const targetZone = document.getElementById(zoneId);
@@ -3121,7 +3120,7 @@ function addLevel26Cloud() {
             cloud.style.bottom = 'calc(20% - 20px)';
             cloud.style.width = '384px';
             cloud.style.height = 'auto';
-            cloud.style.transform = 'translateX(-50%)';
+            cloud.style.transform = 'translateX(-50%) scaleY(1.1)';
             cloud.style.zIndex = '15';
             cloud.style.opacity = '0.4';
             cloud.style.pointerEvents = 'none';
@@ -3129,8 +3128,75 @@ function addLevel26Cloud() {
         }
     });
 
-    // 노란색 구역(가이드 및 물리 판정 영역) 생성 부분은 사용자의 요청에 의해 시각화 제외
-    // (물리 판정 로직인 isInsideLevel26Cloud은 그대로 유지됨)
+    // 2. 구름 물리 판정 영역을 점선으로 시각화 (SVG 사용)
+    const skyWidth = gameContainer.clientWidth;
+    const skyHeight = gameContainer.clientHeight * 0.9195;
+    const zoneHeight = 100 / 7;
+    const halfWidthPct = (384 / skyWidth) * 100 / 2;
+    const pixel35Pct = (35 / skyHeight) * 100;
+    
+    // isInsideLevel26Cloud의 로직을 그대로 재현 (z=1, 2구역)
+    const z = 1;
+    const baseCloudBottom = z * zoneHeight - 2 + pixel35Pct;
+    const baseCloudTop = (z + 1) * zoneHeight + 2;
+    
+    const height = baseCloudTop - baseCloudBottom;
+    const centerY = baseCloudBottom + height / 2;
+    const expandedHalfHeight = (height * 1.1) / 2;
+    
+    const cloudBottomY = centerY - expandedHalfHeight;
+    const cloudCenterTopY = centerY + expandedHalfHeight;
+    
+    // 기울기 팩터
+    const slantFactorRight = Math.tan(20 * Math.PI / 180);
+    const slantFactorLeft = Math.tan(15 * Math.PI / 180);
+    
+    // 경계에서의 높이 보정
+    const dxPixels = (halfWidthPct / 100) * skyWidth;
+    const dyRightPct = (dxPixels * slantFactorRight / skyHeight) * 100;
+    const dyLeftPct = (dxPixels * slantFactorLeft / skyHeight) * 100;
+    
+    const cloudRightTopY = cloudCenterTopY - dyRightPct;
+    const cloudLeftTopY = cloudCenterTopY - dyLeftPct;
+
+    const L = 50 - halfWidthPct;
+    const R = 50 + halfWidthPct;
+    const C = 50;
+
+    // SVG 생성 및 설정
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.className = "level26-cloud-guide-svg";
+    svg.style.position = "absolute";
+    svg.style.top = "0";
+    svg.style.left = "0";
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    svg.style.zIndex = "14";
+    svg.style.pointerEvents = "none";
+
+    const polygon = document.createElementNS(svgNS, "polygon");
+    // SVG 좌표는 상단 기준이므로 (100 - Y)
+    const points = [
+        `${L},${100 - cloudBottomY}`,
+        `${R},${100 - cloudBottomY}`,
+        `${R},${100 - cloudRightTopY}`,
+        `${C},${100 - cloudCenterTopY}`,
+        `${L},${100 - cloudLeftTopY}`
+    ].join(" ");
+    
+    polygon.setAttribute("points", points);
+    polygon.setAttribute("fill", "rgba(255, 255, 255, 0.05)");
+    polygon.setAttribute("stroke", "white");
+    polygon.setAttribute("stroke-width", "0.3");
+    polygon.setAttribute("stroke-dasharray", "1,1");
+    polygon.setAttribute("opacity", "0.7");
+    
+    svg.appendChild(polygon);
+    const skyBg = document.getElementById('sky-background');
+    if (skyBg) skyBg.appendChild(svg);
 }
 
 
@@ -3176,7 +3242,12 @@ function isInsideLevel26Cloud(x, y) {
             currentTop -= dyGameUnits;
         }
 
-        if (y >= zoneBottom - 2 + pixel35InGameUnits && y <= currentTop) {
+        const cloudBottom = zoneBottom - 2 + pixel35InGameUnits;
+        const cloudHeight = currentTop - cloudBottom;
+        const centerY = cloudBottom + cloudHeight / 2;
+        const expandedHalfHeight = (cloudHeight * 1.1) / 2;
+
+        if (y >= centerY - expandedHalfHeight && y <= centerY + expandedHalfHeight) {
             return true;
         }
     }
