@@ -583,6 +583,31 @@ body {
     content: 'C';
 }
 
+.rainbow-coin {
+    width: 30px !important;
+    height: 30px !important;
+    background: linear-gradient(45deg, #ff0000, #ffa500, #ffff00, #00ff00, #8000ff) !important;
+    background-size: 200% 200% !important;
+    animation: rotate-coin 2s infinite linear, coin-float 1.5s infinite alternate ease-in-out, rainbow-animation 2s linear infinite !important;
+    border: 2px solid #fff !important;
+    font-size: 14px !important;
+}
+
+@keyframes rainbow-animation {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+.bonus-glimmer {
+    animation: glimmer-flash 0.5s ease-out;
+}
+
+@keyframes glimmer-flash {
+    0% { box-shadow: inset 0 0 0px 0px rgba(255, 255, 255, 0); }
+    50% { box-shadow: inset 0 0 100px 20px rgba(255, 255, 255, 0.3); }
+    100% { box-shadow: inset 0 0 0px 0px rgba(255, 255, 255, 0); }
+}
+
 /* Orange Bird CSS */
 .bird-css {
     position: absolute;

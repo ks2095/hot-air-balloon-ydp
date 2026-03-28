@@ -508,7 +508,7 @@ const LEVEL_CONFIGS = {
     },
     6: {
         displayName: "EVENT 1",
-        winds: [-2, 2, -2, 2, -2, 2, -2],
+        winds: [-4, 4, -4, 4, -4, 4, -4],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0
@@ -1345,6 +1345,10 @@ function startDragPlacement(key, initialEvent) {
     // 인벤토리 숨기기
     storeScreen.classList.add('hidden');
 
+    const startX = (initialEvent.touches ? initialEvent.touches[0].clientX : initialEvent.clientX);
+    const startY = (initialEvent.touches ? initialEvent.touches[0].clientY : initialEvent.clientY);
+    let hasMoved = false;
+
     // 배치 미리보기 요소 생성
     if (placementPreviewEl) placementPreviewEl.remove();
     const itemData = storeData.items[key];
@@ -1352,12 +1356,16 @@ function startDragPlacement(key, initialEvent) {
     placementPreviewEl.className = 'dropped-item placement-preview dragging';
     placementPreviewEl.innerHTML = `<img src="${itemData.icon}" alt="${itemData.name}">`;
     placementPreviewEl.style.opacity = "0.7";
-    placementPreviewEl.style.pointerEvents = "none"; // 마우스 이벤트 방해 금지
+    placementPreviewEl.style.pointerEvents = "none";
     placementPreviewEl.style.zIndex = "3000";
     gameContainer.appendChild(placementPreviewEl);
 
     const updatePreview = (e) => {
         const ev = e.touches ? e.touches[0] : e;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) hasMoved = true;
+
         const rect = gameContainer.getBoundingClientRect();
         const x = ((ev.clientX - rect.left) / rect.width) * 100;
         const y = 100 - ((ev.clientY - rect.top) / rect.height) * 100;
@@ -1366,17 +1374,8 @@ function startDragPlacement(key, initialEvent) {
         placementPreviewEl.style.bottom = `calc(8.05% + ${(y - 8.05) / 0.9195 * 0.9195}%)`;
     };
 
-    const dropItem = (e) => {
-        // 모든 리스너 즉시 제거
-        window.removeEventListener('mousemove', updatePreview);
-        window.removeEventListener('touchmove', updatePreview);
-        window.removeEventListener('mouseup', dropItem);
-        window.removeEventListener('touchend', dropItem);
-
-        const ev = e.changedTouches ? e.changedTouches[0] : e;
+    const confirmDrop = (ev) => {
         const rect = gameContainer.getBoundingClientRect();
-
-        // 마우스를 놓은 위치가 게임 화면 범위 내인지 확인
         if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
             ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
 
@@ -1386,29 +1385,59 @@ function startDragPlacement(key, initialEvent) {
 
             placeItemOnScreen(key, dropX, gameY);
             upgrades[key]--;
-            // sessionItemsUsed++; // 구 버전 로직용 변수, 새 로직에선 직접 개수 비교하므로 주석 처리하거나 맞춰줌
             savePlayerData();
             updateStoreUI(true);
             if (showWindLabels) updateWindLabels();
         }
 
-        // 미리보기 제거
         if (placementPreviewEl) {
             placementPreviewEl.remove();
             placementPreviewEl = null;
         }
-
         if (gameState === 'PAUSED') resumeGame();
+        
+        // 뒷정리
+        window.removeEventListener('mousemove', updatePreview);
+        window.removeEventListener('touchmove', updatePreview);
+        window.removeEventListener('mouseup', handleInitialDrop);
+        window.removeEventListener('touchend', handleInitialDrop);
+        window.removeEventListener('click', stickyDropHandler);
+        // touchstart click 처리 중복 방지
     };
 
-    // 초기 위치 업데이트
+    const stickyDropHandler = (e) => {
+        if (e.target && e.target.closest('.store-mini-item')) return; // 아이템 슬롯 재클릭 방지
+        const ev = e.touches ? e.touches[0] : e;
+        confirmDrop(ev);
+        e.stopPropagation();
+    };
+
+    const handleInitialDrop = (e) => {
+        if (hasMoved) {
+            const ev = (e.changedTouches ? e.changedTouches[0] : e);
+            confirmDrop(ev);
+        } else {
+            // 움직임 없는 터치/클릭: '선택 모드'로 전환하여 다음 클릭 시 배치
+            window.removeEventListener('mouseup', handleInitialDrop);
+            window.removeEventListener('touchend', handleInitialDrop);
+            
+            // 다음 클릭/탭 시 배치되도록 리스너 추가
+            setTimeout(() => {
+                window.addEventListener('click', stickyDropHandler, { once: true });
+                window.addEventListener('touchstart', (te) => {
+                    stickyDropHandler(te);
+                }, { once: true });
+            }, 50);
+        }
+    };
+
     updatePreview(initialEvent);
     if (initialEvent.cancelable) initialEvent.preventDefault();
 
     window.addEventListener('mousemove', updatePreview);
     window.addEventListener('touchmove', updatePreview, { passive: false });
-    window.addEventListener('mouseup', dropItem);
-    window.addEventListener('touchend', dropItem);
+    window.addEventListener('mouseup', handleInitialDrop);
+    window.addEventListener('touchend', handleInitialDrop);
 }
 
 function cancelItemPlacement() {
@@ -1723,15 +1752,16 @@ function updateStoreUI(isInventoryMode = false) {
                         if (droppedItems.length >= 1) return;
                     } else if (BONUS_G2_LEVELS.includes(displayName)) {
                         if (droppedItems.length >= 2) return;
-                    } else if (BONUS_G4_LEVELS.includes(displayName)) {
-                        if (droppedItems.length >= 4) return;
+                    } else if (BONUS_G3_LEVELS.includes(displayName)) {
+                        if (droppedItems.length >= 3) return;
                     } else {
                         // 아이템 미션이 없는 레벨
                         return;
                     }
 
                     if (upgrades[key] > 0) {
-                        startDragPlacement(key, e.touches[0]);
+                        if (e.cancelable) e.preventDefault();
+                        startDragPlacement(key, e);
                     }
                 }, { passive: false });
             }
@@ -2238,14 +2268,13 @@ function collectCoin(coin) {
     coin.collected = true;
     coin.el.classList.add('collected');
 
-    // 이미 클리어한 레벨이면 코인 포인트 적립 안함 (이벤트 레벨은 예외로 항상 적립 가능하도록 수정 제안 가능하나 현재는 기존 로직 유지)
-    // 단, 이번 세션 획득량은 항상 표시
-    sessionEventCredits += 10;
+    const val = coin.value || 10;
+    sessionEventCredits += val;
     if (eventCreditsValEl) eventCreditsValEl.innerText = sessionEventCredits;
 
     const isAlreadyCleared = clearedLevels.includes(currentLevel);
     if (shouldAllowEventCredits()) {
-        totalCredits += 10;
+        totalCredits += val;
         recordEventCreditGain();
         if (totalCreditsEl) totalCreditsEl.innerText = totalCredits;
         console.log("Credits added:", totalCredits);
@@ -2254,6 +2283,22 @@ function collectCoin(coin) {
     }
 
     playCoinSound();
+
+    // 열기구 위에 획득 점수 (+10 또는 +200) 표시
+    const plusText = document.createElement('div');
+    plusText.className = 'popcorn-plus-text';
+    plusText.innerText = `+${val}`;
+    plusText.style.left = `${balloonX}%`;
+    plusText.style.bottom = `${8.05 + (balloonY * 0.9195) + 12}%`; // 열기구 본체보다 약간 위
+    plusText.style.zIndex = '500';
+    gameContainer.appendChild(plusText);
+    setTimeout(() => plusText.remove(), 800);
+    
+    if (val >= 200) {
+        showFloatingText(`+${val}C RAINBOW BONUS!`, "#ffd32a");
+        gameContainer.classList.add('bonus-glimmer');
+        setTimeout(() => gameContainer.classList.remove('bonus-glimmer'), 500);
+    }
 
     setTimeout(() => {
         coin.el.remove();
@@ -2736,6 +2781,13 @@ function createCoins() {
         for (let i = 0; i < coinsPerZone; i++) {
             const c = document.createElement('div');
             c.className = 'coin';
+
+            // 1구역 우측끝(i=9) 또는 7구역 우측끝(i=9)인 경우 무지개 코인 적용
+            const isSpecialCoin = (zoneId === 1 && i === 9) || (zoneId === 7 && i === 9);
+            if (isSpecialCoin) {
+                c.classList.add('rainbow-coin');
+            }
+
             zone.appendChild(c);
 
             // Spaced out horizontally: 10% to 90%
@@ -2748,7 +2800,8 @@ function createCoins() {
                 x: horizontalPos,
                 y: verticalPos,
                 zoneIndex: zoneId - 1,
-                collected: false
+                collected: false,
+                value: isSpecialCoin ? 200 : 10
             };
 
             c.style.left = `${coin.x}%`;
