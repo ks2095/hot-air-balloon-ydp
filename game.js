@@ -694,6 +694,14 @@ const LEVEL_CONFIGS = {
         maxTime: 40,
         platformY: 6.0,
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    32: {
+        displayName: "27",
+        winds: [-1, -1, -1, 4.75, -2, 4.75, -1.75],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
 
@@ -751,7 +759,7 @@ let stunEndTime = 0; // 스턴 종료 시간
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
 const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
-const BONUS_G3_LEVELS = ["26"];
+const BONUS_G3_LEVELS = ["26", "27"];
 
 function getTotalItemsCount() {
     let total = 0;
@@ -1996,30 +2004,40 @@ function update(timestamp) {
 
 function updateTargetLine() {
     // 모든 레벨에서 착륙 패드가 가로로 움직이지 않도록 고정 (0~30레벨 공통)
-    if (currentLevel >= 0 && currentLevel <= 31) {
+    if (currentLevel >= 0 && currentLevel <= 32) {
+        let step = 0;
         if (currentLevel === 25 || currentLevel === 27 || currentLevel === 31) {
-            // 레벨 21, 23, 26: 좌측으로 이동 (속도 0.2)
-            targetLineX -= 0.2;
-            if (targetLineX < 0) targetLineX = 100;
-        } else if (currentLevel === 26) {
-            // 레벨 22: 좌측으로 이동 (속도 0.25)
-            targetLineX -= 0.25;
-            if (targetLineX < 0) targetLineX = 100;
+            step = -0.2;
+        } else if (currentLevel === 26 || currentLevel === 32) {
+            step = -0.25;
         } else if (currentLevel === 28) {
-            // 레벨 24: 좌측으로 이동 (속도 0.15)
-            targetLineX -= 0.15;
-            if (targetLineX < 0) targetLineX = 100;
+            step = -0.15;
         } else if (currentLevel === 29) {
-            // 레벨 25: 좌측으로 이동 (속도 0.4)
-            targetLineX -= 0.4;
-            if (targetLineX < 0) targetLineX = 100;
+            step = -0.3;
         } else {
             targetLineX = 50;
+            targetLineEl.style.left = `50%`;
+            return;
         }
+
+        // 구름 감속 로직 (속도 1/4로 감소)
+        const config = LEVEL_CONFIGS[currentLevel];
+        if (currentLevel === 31 || currentLevel === 32) {
+            // 플랫폼의 실제 게임 내 수직 위치 계산 (isInsideLevel26Cloud 판정용)
+            // platformY: 6.0 -> 85.7% (Zone 7 bottom edge)
+            const platformGameY = config.platformY * (100 / 7);
+            
+            if (isInsideLevel26Cloud(targetLineX, platformGameY)) {
+                step *= 0.25;
+            }
+        }
+
+        targetLineX += step;
+        if (targetLineX < 0) targetLineX = 100;
+        if (targetLineX > 100) targetLineX = 0;
         targetLineEl.style.left = `${targetLineX}%`;
 
         // 레벨별 플랫폼 높이 반영 (비주얼)
-        const config = LEVEL_CONFIGS[currentLevel];
         const platformY = config.platformY;
         const targetYBottom = (100 / 7) * platformY;
         let pixelOffset = 12;
@@ -3100,22 +3118,22 @@ function resetGame() {
         clearFish();
     }
 
-    // Level 21, 22, 25, 26: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29 || currentLevel === 31) {
+    // Level 21, 22, 25, 26, 27: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29 || currentLevel === 31 || currentLevel === 32) {
         createBirds();
     } else {
         clearBirds();
     }
 
-    // Level 23, 24, 25: Eagle Obstacles (Level 26 removed)
-    if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29) {
+    // Level 23, 24, 25, 26: Eagle Obstacles
+    if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29 || currentLevel === 31) {
         createEagles();
     } else {
         clearEagles();
     }
 
-    // Level 26: Cloud decoration in Zone 4
-    if (currentLevel === 31) {
+    // Level 26, 27: Cloud decoration
+    if (currentLevel === 31 || currentLevel === 32) {
         addLevel26Cloud();
     } else {
         removeLevel26Cloud();
@@ -3160,16 +3178,19 @@ function resetGame() {
 function addLevel26Cloud() {
     removeLevel26Cloud();
     
+    let z = 1; // 기본은 2구역 (Level 26)
+    if (currentLevel === 32) z = 6; // 레벨 27은 7구역
+    else if (currentLevel !== 31) return;
     // 1. 필요한 수치 계산 (물리 판정, 점선 가이드, 구름 이미지 모두에 사용)
     const skyWidth = gameContainer.clientWidth;
     const skyHeight = gameContainer.clientHeight * 0.9195;
     const zoneHeight = 100 / 7;
     const halfWidthPct = (384 / skyWidth) * 100 / 2;
-    const pixel35Pct = (35 / skyHeight) * 100;
+    const cloudOffset = (currentLevel === 32) ? 10 : 35; // 레벨 27은 조금 더 낮게 배치
+    const pixelOffsetPct = (cloudOffset / skyHeight) * 100;
     
-    // isInsideLevel26Cloud의 로직을 그대로 재현 (z=1, 2구역)
-    const z = 1;
-    const baseCloudBottom = z * zoneHeight - 2 + pixel35Pct;
+    // isInsideLevel26Cloud의 로직을 그대로 재현
+    const baseCloudBottom = z * zoneHeight - 2 + pixelOffsetPct;
     const baseCloudTop = (z + 1) * zoneHeight + 2;
     
     const height = baseCloudTop - baseCloudBottom;
@@ -3213,8 +3234,10 @@ function removeLevel26Cloud() {
 }
 
 function isInsideLevel26Cloud(x, y) {
-    if (currentLevel !== 31) return false;
-    
+    let z = 1;
+    if (currentLevel === 31) z = 1;
+    else if (currentLevel === 32) z = 6;
+    else return false;
     const skyWidth = gameContainer.clientWidth;
     const cloudWidthPct = (384 / skyWidth) * 100;
     const halfWidth = cloudWidthPct / 2;
@@ -3223,9 +3246,10 @@ function isInsideLevel26Cloud(x, y) {
     if (x < 50 - halfWidth || x > 50 + halfWidth) return false;
 
     const zoneHeight = 100 / 7;
-    const zones = [1]; // 하단 구름만 남김 (2구역 - 기존 idx 1)
+    const zones = [z]; 
     const skyHeight = gameContainer.clientHeight * 0.9195;
-    const pixel35InGameUnits = (35 / skyHeight) * 100;
+    const cloudOffset = (currentLevel === 32) ? 10 : 35;
+    const pixelOffsetInGameUnits = (cloudOffset / skyHeight) * 100;
     
     const slantFactorRight = Math.tan(20 * Math.PI / 180);
     const slantFactorLeft = Math.tan(15 * Math.PI / 180);
@@ -3248,7 +3272,7 @@ function isInsideLevel26Cloud(x, y) {
             currentTop -= dyGameUnits;
         }
 
-        const cloudBottom = zoneBottom - 2 + pixel35InGameUnits;
+        const cloudBottom = zoneBottom - 2 + pixelOffsetInGameUnits;
         const cloudHeight = currentTop - cloudBottom;
         const centerY = cloudBottom + cloudHeight / 2;
         const expandedHalfHeight = (cloudHeight * 1.1) / 2;
@@ -3854,8 +3878,8 @@ function createBirds() {
     // 기본 생성 구역: 2, 3, 4, 5구역(인덱스 1~4)
     let zonesToSpawn = [1, 2, 3, 4];
     
-    // 레벨 22 (인덱스 26)은 3구역(index 2)과 5구역(index 4)에 한 마리씩 더 추가
-    if (currentLevel === 26) {
+    // 레벨 22, 27 (인덱스 26, 32)은 3구역(index 2)과 5구역(index 4)에 한 마리씩 더 추가
+    if (currentLevel === 26 || currentLevel === 32) {
         zonesToSpawn.push(2); // 3구역 한 마리 더
         zonesToSpawn.push(4); // 5구역 한 마리 더
     }
@@ -3897,39 +3921,39 @@ function createBirds() {
             birdY = zoneIdx * (100 / 7);
         }
 
-        // 레벨 22, 2구역(zoneIdx 1) 붉은새 커스텀 (좌측 벽면 중앙 출발, 속도 0.4)
-        if (currentLevel === 26 && zoneIdx === 1) {
+        // 레벨 22, 27, 2구역(zoneIdx 1) 붉은새 커스텀 (좌측 벽면 중앙 출발, 속도 0.4)
+        if ((currentLevel === 26 || currentLevel === 32) && zoneIdx === 1) {
             birdVelX = 0.4; 
             birdX = 0; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 22, 3구역(zoneIdx 2) 붉은새 1 (LoopIdx 1) - 우측 하단 1/4 출발, 속도 0.4
-        if (currentLevel === 26 && loopIdx === 1) {
+        // 레벨 22, 27, 3구역(zoneIdx 2) 붉은새 1 (LoopIdx 1) - 우측 하단 1/4 출발, 속도 0.4
+        if ((currentLevel === 26 || currentLevel === 32) && loopIdx === 1) {
             birdVelX = -0.4; 
             birdX = 100; 
             birdY = (zoneIdx + 0.25) * (100 / 7);
         }
-        // 레벨 22, 3구역(zoneIdx 2) 붉은새 2 (LoopIdx 4) - 좌측 상단 3/4 출발, 속도 0.4
-        if (currentLevel === 26 && loopIdx === 4) {
+        // 레벨 22, 27, 3구역(zoneIdx 2) 붉은새 2 (LoopIdx 4) - 좌측 상단 3/4 출발, 속도 0.4
+        if ((currentLevel === 26 || currentLevel === 32) && loopIdx === 4) {
             birdVelX = 0.4; 
             birdX = 0; 
             birdY = (zoneIdx + 0.75) * (100 / 7);
         }
 
-        // 레벨 22, 4구역(zoneIdx 3) 붉은새 커스텀 (우측 중간 출발, 속도 0.4)
-        if (currentLevel === 26 && zoneIdx === 3) {
+        // 레벨 22, 27, 4구역(zoneIdx 3) 붉은새 커스텀 (우측 중간 출발, 속도 0.4)
+        if ((currentLevel === 26 || currentLevel === 32) && zoneIdx === 3) {
             birdVelX = -0.4; 
             birdX = 100; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 22, 5구역(zoneIdx 4) 붉은새 1 (LoopIdx 3) - 좌측 중간 출발, 속도 0.3
-        if (currentLevel === 26 && loopIdx === 3) {
+        // 레벨 22, 27, 5구역(zoneIdx 4) 붉은새 1 (LoopIdx 3) - 좌측 중간 출발, 속도 0.3
+        if ((currentLevel === 26 || currentLevel === 32) && loopIdx === 3) {
             birdVelX = 0.3; 
             birdX = 0; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 22, 5구역(zoneIdx 4) 붉은새 2 (LoopIdx 5) - 우측 하단 출발, 속도 0.28
-        if (currentLevel === 26 && loopIdx === 5) {
+        // 레벨 22, 27, 5구역(zoneIdx 4) 붉은새 2 (LoopIdx 5) - 우측 하단 출발, 속도 0.28
+        if ((currentLevel === 26 || currentLevel === 32) && loopIdx === 5) {
             birdVelX = -0.28; 
             birdX = 100; 
             birdY = zoneIdx * (100 / 7);
@@ -4205,9 +4229,9 @@ function checkBirdCollisions() {
         const combinedBasketRadiusSq = Math.pow(basketRadius + birdRadius, 2);
 
         if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
-            // 21, 22, 25레벨에서는 즉시 폭발
+            // 21, 22, 25, 27레벨 등에서는 즉시 폭발
             const config = LEVEL_CONFIGS[currentLevel];
-            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25" || config.displayName === "26")) {
+            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25" || config.displayName === "26" || config.displayName === "27")) {
                 gameOver('CRASH');
                 return;
             }
@@ -4647,7 +4671,7 @@ if (adSelectLifeBtn) {
             return;
         }
         adSelectionOverlay.classList.add('hidden');
-        showAd('life', 30);
+        showAd('life', 20);
     });
 }
 
