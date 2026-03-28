@@ -3149,52 +3149,7 @@ function addLevel26Cloud() {
         skyBg.appendChild(cloud);
     }
 
-    // 3. 구름 물리 판정 영역을 점선으로 시각화 (SVG 사용)
-    const slantFactorRight = Math.tan(20 * Math.PI / 180);
-    const slantFactorLeft = Math.tan(15 * Math.PI / 180);
-    
-    const dxPixels = (halfWidthPct / 100) * skyWidth;
-    const dyRightPct = (dxPixels * slantFactorRight / skyHeight) * 100;
-    const dyLeftPct = (dxPixels * slantFactorLeft / skyHeight) * 100;
-    
-    const cloudRightTopY = cloudCenterTopY - dyRightPct;
-    const cloudLeftTopY = cloudCenterTopY - dyLeftPct;
 
-    const L = 50 - halfWidthPct;
-    const R = 50 + halfWidthPct;
-    const C = 50;
-
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 100 100");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.className = "level26-cloud-guide-svg";
-    svg.style.position = "absolute";
-    svg.style.top = "0";
-    svg.style.left = "0";
-    svg.style.width = "100%";
-    svg.style.height = "100%";
-    svg.style.zIndex = "14";
-    svg.style.pointerEvents = "none";
-
-    const polygon = document.createElementNS(svgNS, "polygon");
-    const points = [
-        `${L},${100 - cloudBottomY}`,
-        `${R},${100 - cloudBottomY}`,
-        `${R},${100 - cloudRightTopY}`,
-        `${C},${100 - cloudCenterTopY}`,
-        `${L},${100 - cloudLeftTopY}`
-    ].join(" ");
-    
-    polygon.setAttribute("points", points);
-    polygon.setAttribute("fill", "rgba(255, 255, 255, 0.05)");
-    polygon.setAttribute("stroke", "white");
-    polygon.setAttribute("stroke-width", "0.3");
-    polygon.setAttribute("stroke-dasharray", "1,1");
-    polygon.setAttribute("opacity", "0.7");
-    
-    svg.appendChild(polygon);
-    if (skyBg) skyBg.appendChild(svg);
 }
 
 
