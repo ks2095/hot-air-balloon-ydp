@@ -3107,28 +3107,7 @@ function resetGame() {
 function addLevel26Cloud() {
     removeLevel26Cloud();
     
-    // 1. 하단 구름 이미지 생성 (시각적 장식)
-    const imageZones = ['zone-1'];
-    imageZones.forEach(zoneId => {
-        const targetZone = document.getElementById(zoneId);
-        if (targetZone) {
-            const cloud = document.createElement('img');
-            cloud.src = '구름1.png';
-            cloud.className = 'level26-cloud';
-            cloud.style.position = 'absolute';
-            cloud.style.left = '50%';
-            cloud.style.bottom = 'calc(20% - 20px)';
-            cloud.style.width = '384px';
-            cloud.style.height = 'auto';
-            cloud.style.transform = 'translateX(-50%) scaleY(1.1)';
-            cloud.style.zIndex = '15';
-            cloud.style.opacity = '0.4';
-            cloud.style.pointerEvents = 'none';
-            targetZone.appendChild(cloud);
-        }
-    });
-
-    // 2. 구름 물리 판정 영역을 점선으로 시각화 (SVG 사용)
+    // 1. 필요한 수치 계산 (물리 판정, 점선 가이드, 구름 이미지 모두에 사용)
     const skyWidth = gameContainer.clientWidth;
     const skyHeight = gameContainer.clientHeight * 0.9195;
     const zoneHeight = 100 / 7;
@@ -3146,12 +3125,31 @@ function addLevel26Cloud() {
     
     const cloudBottomY = centerY - expandedHalfHeight;
     const cloudCenterTopY = centerY + expandedHalfHeight;
-    
-    // 기울기 팩터
+
+    const skyBg = document.getElementById('sky-background');
+
+    // 2. 하단 구름 이미지 생성 (시각적 장식)
+    // 점선 크기와 동일하게 백분율(%)로 크기 및 위치 조정
+    if (skyBg) {
+        const cloud = document.createElement('img');
+        cloud.src = '구름1.png';
+        cloud.className = 'level26-cloud';
+        cloud.style.position = 'absolute';
+        cloud.style.left = '50%';
+        cloud.style.bottom = `${cloudBottomY - (100 / 25)}%`; 
+        cloud.style.width = `${(halfWidthPct * 2) * 1.1}%`; 
+        cloud.style.height = `${(cloudCenterTopY - cloudBottomY) * 1.1}%`; 
+        cloud.style.transform = 'translateX(-50%) scaleY(3.0)';
+        cloud.style.zIndex = '15';
+        cloud.style.opacity = '0.4';
+        cloud.style.pointerEvents = 'none';
+        skyBg.appendChild(cloud);
+    }
+
+    // 3. 구름 물리 판정 영역을 점선으로 시각화 (SVG 사용)
     const slantFactorRight = Math.tan(20 * Math.PI / 180);
     const slantFactorLeft = Math.tan(15 * Math.PI / 180);
     
-    // 경계에서의 높이 보정
     const dxPixels = (halfWidthPct / 100) * skyWidth;
     const dyRightPct = (dxPixels * slantFactorRight / skyHeight) * 100;
     const dyLeftPct = (dxPixels * slantFactorLeft / skyHeight) * 100;
@@ -3163,7 +3161,6 @@ function addLevel26Cloud() {
     const R = 50 + halfWidthPct;
     const C = 50;
 
-    // SVG 생성 및 설정
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", "0 0 100 100");
@@ -3178,7 +3175,6 @@ function addLevel26Cloud() {
     svg.style.pointerEvents = "none";
 
     const polygon = document.createElementNS(svgNS, "polygon");
-    // SVG 좌표는 상단 기준이므로 (100 - Y)
     const points = [
         `${L},${100 - cloudBottomY}`,
         `${R},${100 - cloudBottomY}`,
@@ -3195,7 +3191,6 @@ function addLevel26Cloud() {
     polygon.setAttribute("opacity", "0.7");
     
     svg.appendChild(polygon);
-    const skyBg = document.getElementById('sky-background');
     if (skyBg) skyBg.appendChild(svg);
 }
 
