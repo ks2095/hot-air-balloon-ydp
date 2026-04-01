@@ -464,6 +464,12 @@ let activeBirds = []; // Level 21 birds
 let activeEagles = []; // Level 23 eagles
 let activeRaindrops = []; // Level 26 rain
 let level26CloudX = 50; // Level 26 cloud dynamic X
+let rainSeed = 12345;
+let rainPowerReductionEndTime = 0;
+function seededRainRandom() {
+    rainSeed = (rainSeed * 9301 + 49297) % 233280;
+    return rainSeed / 233280;
+}
 let attachedFish = null;
 let draggingOffset = { x: 0, y: 0 };
 
@@ -693,7 +699,7 @@ const LEVEL_CONFIGS = {
     },
     31: {
         displayName: "26",
-        winds: [2, -4.75, 3, -4.75, 3, -3, 3],
+        winds: [2.0, -2.0, 2.0, -2.0, 2.0, -2.0, 2.0],
         maxGas: 400,
         maxTime: 40,
         platformY: 6.0,
@@ -769,9 +775,9 @@ let isStunned = false; // 붉은새 충돌 시 상태
 let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
-const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23"];
+const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23", "26"];
 const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
-const BONUS_G3_LEVELS = ["26"];
+const BONUS_G3_LEVELS = [];
 const BONUS_G4_LEVELS = ["27", "28"];
 
 
@@ -1956,7 +1962,12 @@ function update(timestamp) {
     balloon.style.left = `${balloonX}%`;
 
     if (isBurning) {
-        balloon.classList.add('burning');
+        // 26레벨 빗물 페널티 시에는 불꽃이 나오지 않도록 처리
+        if (currentLevel === 31 && Date.now() < rainPowerReductionEndTime) {
+            balloon.classList.remove('burning');
+        } else {
+            balloon.classList.add('burning');
+        }
     } else {
         balloon.classList.remove('burning');
     }
@@ -2085,6 +2096,11 @@ function handleMovement() {
         let appliedForce = currentBurnerForce;
         if (burnDuration > 500) {
             appliedForce *= 1.155; // 0.5초 이상 누를 시 상승 힘 5.5% 추가 증가 (총 15.5%)
+        }
+
+        // 26레벨 빗물 페널티: 2초간 버너 작동 중지
+        if (currentLevel === 31 && Date.now() < rainPowerReductionEndTime) {
+            appliedForce = 0;
         }
         velY += appliedForce;
 
@@ -3042,6 +3058,7 @@ function resetGame() {
     }
 
     console.log(`Resetting to Level ${currentLevel}`);
+    rainSeed = currentLevel + 777; // 레벨별로 다른 시드 부여, 재시작 시 동일 패턴 보장
     savePlayerData();
 
     if (lives <= 0) {
@@ -3204,9 +3221,9 @@ function addLevel26Cloud() {
     let posShiftPct = 0; // 추가적인 위치 이동량 (백분율)
 
     if (currentLevel === 31) {
-        z = 2; // 레벨 26: 3구역
+        z = 6; // 레벨 26: 7구역
         sizeScale = 0.6; // 크기 60%
-        posShiftPct = (zoneHeight * 0.2); // 구름 상단이 3구역 상단에 걸치도록 위로 이동 ((1-0.6)/2 = 0.2)
+        posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6); // 점선 가이드를 1/6구역만큼 추가 하향
     } else if (currentLevel === 32) {
         z = 5; // 레벨 27은 6구역
     } else if (currentLevel === 33) {
@@ -3248,7 +3265,7 @@ function addLevel26Cloud() {
         cloud.className = 'level26-cloud';
         cloud.style.position = 'absolute';
         cloud.style.left = '50%';
-        cloud.style.bottom = `${cloudBottomY - (100 / 60)}%`; // 이미지는 기존 위치를 거의 유지하도록 오프셋 조정 (약 -1.6%)
+        cloud.style.bottom = `${cloudBottomY - (100 / 60) - (zoneHeight / 5) + (zoneHeight / 6)}%`; // 구름 이미지는 그대로 유지
         cloud.style.width = `${(halfWidthPct * 2) * 1.1}%`; 
         cloud.style.height = `${(cloudCenterTopY - cloudBottomY) * 1.1}%`; 
         cloud.style.transform = 'translateX(-50%) scaleY(3.0)';
@@ -3286,23 +3303,22 @@ function addLevel26Cloud() {
         const dyGameUnitsRight = (dxPixels * slantFactorRight / skyHeight) * 100;
         const dyGameUnitsLeft = (dxPixels * slantFactorLeft / skyHeight) * 100;
 
-        const currentTopRight = baseCloudTop - dyGameUnitsRight;
-        const currentTopLeft = baseCloudTop - dyGameUnitsLeft;
+        const currentTopRightTop = baseCloudTop - dyGameUnitsRight; // 상단은 산 모양으로 반전
+        const currentTopLeftTop = baseCloudTop - dyGameUnitsLeft;
+        const currentTopRightBot = baseCloudTop + dyGameUnitsRight; // 하단은 계곡 모양 그대로 유지
+        const currentTopLeftBot = baseCloudTop + dyGameUnitsLeft;
         const currentTopCenter = baseCloudTop;
 
-        const cBot = baseCloudBottom;
-
-        // corners (Game coordinates: bottom-up)
         const lx = 50 - halfWidthPct;
         const rx = 50 + halfWidthPct;
         const mx = 50;
 
-        const lyTop = ((currentTopLeft + baseCloudBottom) / 2) + ((currentTopLeft - baseCloudBottom) * sizeScale * 1.1) / 2;
-        const ryTop = ((currentTopRight + baseCloudBottom) / 2) + ((currentTopRight - baseCloudBottom) * sizeScale * 1.1) / 2;
+        const lyTop = ((currentTopLeftTop + baseCloudBottom) / 2) + ((currentTopLeftTop - baseCloudBottom) * sizeScale * 1.1) / 2;
+        const ryTop = ((currentTopRightTop + baseCloudBottom) / 2) + ((currentTopRightTop - baseCloudBottom) * sizeScale * 1.1) / 2;
         const myTop = ((currentTopCenter + baseCloudBottom) / 2) + ((currentTopCenter - baseCloudBottom) * sizeScale * 1.1) / 2;
 
-        const lyBot = ((currentTopLeft + baseCloudBottom) / 2) - ((currentTopLeft - baseCloudBottom) * sizeScale * 1.1) / 2;
-        const ryBot = ((currentTopRight + baseCloudBottom) / 2) - ((currentTopRight - baseCloudBottom) * sizeScale * 1.1) / 2;
+        const lyBot = ((currentTopLeftBot + baseCloudBottom) / 2) - ((currentTopLeftBot - baseCloudBottom) * sizeScale * 1.1) / 2;
+        const ryBot = ((currentTopRightBot + baseCloudBottom) / 2) - ((currentTopRightBot - baseCloudBottom) * sizeScale * 1.1) / 2;
         const myBot = ((currentTopCenter + baseCloudBottom) / 2) - ((currentTopCenter - baseCloudBottom) * sizeScale * 1.1) / 2;
 
         const points = [
@@ -3348,7 +3364,7 @@ function spawnRaindrop() {
     let sizeScale = 1.0;
     let posShiftPct = 0;
     if (currentLevel === 31) {
-        z = 2; sizeScale = 0.6; posShiftPct = (zoneHeight * 0.2);
+        z = 6; sizeScale = 0.6; posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6);
     } else if (currentLevel === 32) z = 5;
     else if (currentLevel === 33) z = 2;
     else return;
@@ -3365,7 +3381,8 @@ function spawnRaindrop() {
     const centerY = baseCloudBottom + baseHeight / 2;
     const startY = centerY - (height * 0.9) / 2; // Spawn from near the bottom edge
 
-    const startX = level26CloudX - halfWidthPct + Math.random() * (halfWidthPct * 2);
+    const currentRandom = (currentLevel === 31) ? seededRainRandom : Math.random;
+    const startX = level26CloudX - halfWidthPct + currentRandom() * (halfWidthPct * 2);
 
     const rainEl = document.createElement('div');
     rainEl.className = 'raindrop';
@@ -3375,8 +3392,8 @@ function spawnRaindrop() {
         el: rainEl,
         x: startX,
         y: startY,
-        velY: 0.3 + Math.random() * 0.2, // 이전 대비 다시 절반 속도로 감속 (0.3~0.5)
-        velX: (Math.random() - 0.5) * 0.05
+        velY: (0.3 + currentRandom() * 0.2) * (currentLevel === 31 ? 0.33 : 1), // 26레벨(31)은 속도 1/3로 감속
+        velX: (currentRandom() - 0.5) * 0.05
     });
 }
 
@@ -3385,8 +3402,7 @@ function updateRain() {
 
     // 레벨별 빗방울 개수 차등 적용 (26레벨은 100%, 27레벨은 50%)
     if (currentLevel === 31) {
-        if (Math.random() > 0.6) spawnRaindrop();
-        if (Math.random() > 0.7) spawnRaindrop();
+        if (seededRainRandom() > 0.9725) spawnRaindrop(); // 갯수 10% 증가 (0.025 -> 0.0275 확률)
     } else if (currentLevel === 32) {
         if (Math.random() > 0.65) spawnRaindrop(); 
     }
@@ -3401,10 +3417,42 @@ function updateRain() {
         drop.y -= drop.velY;
         drop.x += drop.velX;
 
-        // 비 충돌 판정 (미리 계산된 변수 활용하여 렉 최적화)
-        if (gameState === 'PLAY' && Math.abs(drop.x - balloonX) < halfW && drop.y > balloonY && drop.y < balloonY + balloonHeightPct) {
-            gas = Math.max(0, gas - 3);
-            showFloatingText("-3 GAS", "#ff4d4d");
+        // 비 충돌 판정: 26레벨은 파란색 원(열기구 몸체)에 맞았을 때만 작동
+        let isHit = false;
+        const skyWidth = gameContainer.clientWidth;
+        const skyHeight = gameContainer.clientHeight * 0.9195;
+
+        if (currentLevel === 31) {
+            const bodyXPx = (balloonX / 100) * skyWidth;
+            const bodyYPx = ((balloonY + getMarkerOffset()) / 100) * skyHeight;
+            const bodyRadius = 32.5 / 2;
+            
+            const dropXPx = (drop.x / 100) * skyWidth;
+            const dropYPx = (drop.y / 100) * skyHeight;
+            
+            const dx = dropXPx - bodyXPx;
+            const dy = dropYPx - bodyYPx;
+            if (dx * dx + dy * dy < bodyRadius * bodyRadius) {
+                isHit = true;
+            }
+        } else {
+            const balloonWidthPct = (45 / (skyWidth || 1)) * 100;
+            const halfW = balloonWidthPct / 2;
+            const balloonHeightPct = (110 / skyHeight) * 100;
+            if (Math.abs(drop.x - balloonX) < halfW && drop.y > balloonY && drop.y < balloonY + balloonHeightPct) {
+                isHit = true;
+            }
+        }
+
+        if (gameState === 'PLAY' && isHit) {
+            if (currentLevel === 31) {
+                showFloatingText("BURNER FAIL", "#ff4d4d");
+                // 빗물 페널티: 2초간 버너 작동 중지
+                rainPowerReductionEndTime = Date.now() + 2000;
+            } else {
+                gas = Math.max(0, gas - 3);
+                showFloatingText("-3 GAS", "#ff4d4d");
+            }
             
             if (drop.el && drop.el.parentNode) drop.el.remove();
             activeRaindrops.splice(i, 1);
@@ -3426,7 +3474,7 @@ function updateCloudPosition() {
     if (currentLevel < 31 || currentLevel > 33) return;
 
     let z = 1;
-    if (currentLevel === 31) z = 2;
+    if (currentLevel === 31) z = 6;
     else if (currentLevel === 32) z = 5;
     else if (currentLevel === 33) z = 2;
 
@@ -3462,9 +3510,9 @@ function isInsideLevel26Cloud(x, y, halfW = 0, halfH = 0) {
     let sizeScale = 1.0;
     let posShiftPct = 0;
     if (currentLevel === 31) {
-        z = 2;
+        z = 6;
         sizeScale = 0.6;
-        posShiftPct = (zoneHeight * 0.2); // 구름 상단 맞춤
+        posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6); // 점선 가이드를 1/6구역만큼 추가 하향
     } else if (currentLevel === 32) z = 5;
     else if (currentLevel === 33) z = 2;
     else return false;
@@ -3488,24 +3536,33 @@ function isInsideLevel26Cloud(x, y, halfW = 0, halfH = 0) {
     const zoneBottom = z * zoneHeight + quarterZonePct;
     const baseZoneTop = (z + 1) * zoneHeight + 2 + quarterZonePct; 
 
-    let currentTop = baseZoneTop;
+    let currentTopForTop = baseZoneTop;
+    let currentTopForBot = baseZoneTop;
     if (x > 50) {
         const dxPixels = (x - 50) / 100 * skyWidth;
         const dyPixels = dxPixels * slantFactorRight;
         const dyGameUnits = (dyPixels / skyHeight) * 100;
-        currentTop -= dyGameUnits;
+        currentTopForTop -= dyGameUnits; // 상단은 산 모양으로 반전
+        currentTopForBot += dyGameUnits; // 하단은 계곡 모양 그대로 유지
     } else if (x < 50) {
         const dxPixels = (50 - x) / 100 * skyWidth;
         const dyPixels = dxPixels * slantFactorLeft;
         const dyGameUnits = (dyPixels / skyHeight) * 100;
-        currentTop -= dyGameUnits;
+        currentTopForTop -= dyGameUnits;
+        currentTopForBot += dyGameUnits;
     }
 
     const baseCloudBottom = zoneBottom - 2 + pixelOffsetInGameUnits + posShiftPct;
-    const baseHeight = (currentTop + posShiftPct) - baseCloudBottom;
-    const centerY = baseCloudBottom + baseHeight / 2;
-    const cloudBottom = centerY - (baseHeight * sizeScale) / 2;
-    const cloudTop = centerY + (baseHeight * sizeScale) / 2;
+    
+    // 상단 경계 계산
+    const baseHeightTop = (currentTopForTop + posShiftPct) - baseCloudBottom;
+    const centerYTop = baseCloudBottom + baseHeightTop / 2;
+    const cloudTop = centerYTop + (baseHeightTop * sizeScale) / 2;
+
+    // 하단 경계 계산 (기존 로직 유지)
+    const baseHeightBot = (currentTopForBot + posShiftPct) - baseCloudBottom;
+    const centerYBot = baseCloudBottom + baseHeightBot / 2;
+    const cloudBottom = centerYBot - (baseHeightBot * sizeScale) / 2;
     
     // Y축 범위 오버랩 체크
     if (y + halfH >= cloudBottom && y - halfH <= cloudTop) {
