@@ -3047,3 +3047,13 @@ button:hover {
 */
 
 
+. l i g h t n i n g - h i t b o x - v i s u a l   {  
+         p o s i t i o n :   a b s o l u t e ;  
+         w i d t h :   1 0 0 % ;  
+         h e i g h t :   1 0 0 % ;  
+         b o r d e r :   3 p x   d a s h e d   # f f e b 3 b ;   / *   T h i c k   y e l l o w   d a s h e d   b o r d e r   * /  
+         b o x - s i z i n g :   b o r d e r - b o x ;  
+         p o i n t e r - e v e n t s :   n o n e ;  
+         z - i n d e x :   1 0 0 0 ;  
+ }  
+ 

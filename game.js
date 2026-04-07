@@ -413,17 +413,17 @@ async function startSoundSystem() {
 async function preloadSounds() {
     soundMgr.init();
     const effects = [
-        { name: 'burner', url: '열기구소리.MP3' },
-        { name: 'burner_alt', url: '열기구소리..MP3' },
-        { name: 'success', url: '미션성공.MP3' },
-        { name: 'explosion', url: '폭발.MP3' },
-        { name: 'coin', url: '코인소리.mp3' },
-        { name: 'life', url: '생명소리.MP3' },
-        { name: 'popcorn', url: '팝콘소리.MP3' },
-        { name: 'hit', url: '히트.MP3' },
-        { name: 'bird_hit', url: '새충돌소리.MP3' },
-        { name: 'thunder', url: '천둥소리.MP3' },
-        { name: 'eagle_fall', url: '독수리추락.MP3' }
+        { name: 'burner', url: encodeURI('열기구소리.MP3') },
+        { name: 'burner_alt', url: encodeURI('열기구소리..MP3') },
+        { name: 'success', url: encodeURI('미션성공.MP3') },
+        { name: 'explosion', url: encodeURI('폭발.MP3') },
+        { name: 'coin', url: encodeURI('코인소리.mp3') },
+        { name: 'life', url: encodeURI('생명소리.MP3') },
+        { name: 'popcorn', url: encodeURI('팝콘소리.MP3') },
+        { name: 'hit', url: encodeURI('히트.MP3') },
+        { name: 'bird_hit', url: encodeURI('새충돌소리.MP3') },
+        { name: 'thunder', url: encodeURI('천둥소리.MP3') },
+        { name: 'eagle_fall', url: encodeURI('독수리추락.MP3') }
     ];
     // Parallel decode-into-memory
     await Promise.all(effects.map(effect => soundMgr.loadSound(effect.name, effect.url)));
@@ -782,9 +782,9 @@ let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23", "26"];
-const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25"];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25", "27", "28"];
 const BONUS_G3_LEVELS = [];
-const BONUS_G4_LEVELS = ["27", "28"];
+const BONUS_G4_LEVELS = [];
 
 
 function getTotalItemsCount() {
@@ -1341,11 +1341,19 @@ function startGame() {
     windCycleStartTime = missionStartTime;
     level26CloudX = 50; // 구름 위치 초기화
     
-    // 26, 27레벨용 빗방울 시드 및 현장 비우기 (매 시작마다 동일 패턴 보장)
-    if (currentLevel === 31 || currentLevel === 32) {
+    // 26, 27, 28레벨용 빗방울 시드 및 현장 비우기 (매 시작마다 동일 패턴 보장)
+    if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) {
         rainSeed = currentLevel + 777;
         activeRaindrops.forEach(drop => { if (drop.el && drop.el.parentNode) drop.el.remove(); });
         activeRaindrops.length = 0;
+        
+        // 28레벨 전용 번개 시퀀스 초기화 (시작 버튼 누른 시점부터 5초 타이머 시작)
+        if (currentLevel === 33) {
+            lightningStrikeState = 'IDLE';
+            lightningTimer = 0;
+            lastLightningStartTime = Date.now(); 
+            activeLightningBolts = [];
+        }
     }
     
     playRandomBGM();
@@ -2112,9 +2120,10 @@ function handleMovement() {
             appliedForce *= 1.155; // 0.5초 이상 누를 시 상승 힘 5.5% 추가 증가 (총 15.5%)
         }
 
-        // 26, 27레벨 빗물 페널티: 2초간 버너 작동 중지
-        if ((currentLevel === 31 || currentLevel === 32) && Date.now() < rainPowerReductionEndTime) {
+        // 26, 27, 28레벨 빗물 페널티: 2초간 버너 작동 중지 및 상승 제한
+        if ((currentLevel === 31 || currentLevel === 32 || currentLevel === 33) && Date.now() < rainPowerReductionEndTime) {
             appliedForce = 0;
+            if (velY > 0) velY = 0; // 상승 속도 즉시 차단
         }
         velY += appliedForce;
 
@@ -3532,7 +3541,15 @@ function updateCloudPosition() {
                 lightningStrikeState = 'FLASHING';
                 lightningTimer = 3000; // 3초간 번쩍임
                 clouds.forEach(c => c.classList.add('flashing'));
-                soundMgr.play('thunder', false, 0.7); // 천둥소리 재생
+                
+                // 천둥소리 재생 (안전하게 재개 후 재생)
+                if (soundMgr.context && soundMgr.context.state === 'suspended') {
+                    soundMgr.resume().then(() => {
+                        soundMgr.play('thunder', false, 1.0);
+                    });
+                } else {
+                    soundMgr.play('thunder', false, 1.0);
+                }
             }
         } else if (lightningStrikeState === 'FLASHING') {
             // 구름은 바람대로 그대로 흘러감
@@ -3549,7 +3566,16 @@ function updateCloudPosition() {
                 if (skyBg) {
                     const boltEl = document.createElement('div');
                     boltEl.className = 'lightning-bolt active';
-                    skyBg.appendChild(boltEl);
+                    boltEl.style.position = 'absolute';
+                    boltEl.style.width = '17.28px'; // 34.56 * 0.5
+                    boltEl.style.height = '72px';  // 144 * 0.5
+                    boltEl.style.backgroundImage = "url('번개.png')";
+                    boltEl.style.backgroundColor = 'white'; // 이미지 로드 실패 대비 배경색 (흰색)
+                    boltEl.style.boxShadow = '0 0 10px rgba(255,255,255,0.8)'; // 시각적 가시성 보정
+                    boltEl.style.backgroundSize = 'contain';
+                    boltEl.style.backgroundRepeat = 'no-repeat';
+                    boltEl.style.zIndex = '500'; // 구름(14) 및 다른 요소보다 높게 설정
+                    gameContainer.appendChild(boltEl);
                     
                     const quarterZonePct = (zoneHeight / 4);
                     const cloudOffset = 35;
@@ -3585,52 +3611,68 @@ function updateCloudPosition() {
             const skyH = gameContainer.clientHeight * 0.9195;
             const gameW = gameContainer.clientWidth;
             
-            // 1. 파란색 원(열기구 본체) 정보 - 픽셀 환산
+            // 1. 파란색 원(열기구 본체) 정보 - 픽셀 환산 (반지름 16.25px)
             const markerR = 32.5 / 2;
             const markerX_px = (balloonX / 100) * gameW;
             const markerY_px = ((balloonY + getMarkerOffset()) / 100) * skyH;
             
-            // 2. 번개 흰색 본체 정보 - 픽셀 환산 (17.28px x 72px)
-            const boltW_px = 17.28;
-            const boltH_px = 72;
+            // 2. 번개 흰색 본체 정보 - 픽셀 환산 (길이를 위로 추가 10% 연장)
+            const boltW_px = 14;  
+            const boltH_px = 60;  // 54px * 1.1(10% 추가 증강) = 약 60px로 연장
+            const boltYOffset_px = 8; // 하단 오프셋은 8px 유지
             const boltX_px = (bolt.x / 100) * gameW;
-            const boltY_px = (bolt.y / 100) * skyH;
+            const boltY_px = (bolt.y / 100) * skyH + boltYOffset_px;
             
             const rectL = boltX_px - (boltW_px / 2);
             const rectR = boltX_px + (boltW_px / 2);
             const rectB = boltY_px;
             const rectT = boltY_px + boltH_px;
             
-            // 3. 원의 중심에서 직사각형까지의 가장 가까운 지점 찾기
+            // --- 열기구 충돌 체크 ---
             const closestX = Math.max(rectL, Math.min(markerX_px, rectR));
             const closestY = Math.max(rectB, Math.min(markerY_px, rectT));
-            
-            // 4. 거리의 제곱이 반지름의 제곱보다 작으면 충돌
             const dx = markerX_px - closestX;
             const dy = markerY_px - closestY;
-            const distSq = (dx * dx) + (dy * dy);
-
-            if (distSq < (markerR * markerR)) {
+            if ((dx * dx) + (dy * dy) < (markerR * markerR)) {
                 gameOver('CRASH');
                 bolt.el.remove();
                 activeLightningBolts.splice(i, 1);
                 continue;
             }
 
-            // 2. 독수리 충돌 판정 (독수리에 맞으면 번개 제거)
+            // --- 독수리 충돌 체크 (정밀 3점 판정) ---
             let isBoltRemoved = false;
-            // 독수리는 기존의 퍼센트 기반 판정을 유지하되, 번개 범위를 정밀하게 계산
-            const bL = (rectL / gameW) * 100;
-            const bR = (rectR / gameW) * 100;
-            const bB = (rectB / skyH) * 100;
-            const bT = (rectT / skyH) * 100;
-
             for (let j = activeEagles.length - 1; j >= 0; j--) {
                 const eagle = activeEagles[j];
                 if (eagle.isHit) continue;
-                // 기존 판정 범위 (-3 ~ +3) 유지
-                if (eagle.x > bL - 3 && eagle.x < bR + 3 &&
-                    eagle.y > bB && eagle.y < bT) {
+                
+                const eagleBaseX = (eagle.x / 100) * gameW;
+                const eagleBaseY = (eagle.y / 100) * skyH;
+                const dir = (eagle.velX > 0) ? -1 : 1;
+                
+                const centers = [
+                    { dx: 0, dy: 22, r: 10.5 },   // 몸통
+                    { dx: -18, dy: 25, r: 7.5 },  // 머리 측
+                    { dx: 18, dy: 30, r: 7.5 }    // 뒤쪽
+                ];
+                
+                let eagleHit = false;
+                for (let pt of centers) {
+                    const cx = eagleBaseX + (pt.dx * dir);
+                    const cy = eagleBaseY + pt.dy;
+                    const r = pt.r;
+                    
+                    const cX = Math.max(rectL, Math.min(cx, rectR));
+                    const cY = Math.max(rectB, Math.min(cy, rectT));
+                    const dX = cx - cX;
+                    const dY = cy - cY;
+                    if (dX*dX + dY*dY < r*r) {
+                        eagleHit = true;
+                        break;
+                    }
+                }
+                
+                if (eagleHit) {
                     eagle.isHit = true;
                     eagle.velY = -0.8; 
                     if (eagle.el) eagle.el.classList.add('hit-effect');
