@@ -3007,4 +3007,43 @@ button:hover {
     box-shadow: 0 0 10px rgba(255, 211, 42, 0.3);
 }
 
+.storm-cloud {
+    filter: brightness(0.4) contrast(1.2) grayscale(0.5);
+    opacity: 0.7 !important; /* Make it more solid and darker */
+}
+
+.storm-cloud.flashing {
+    animation: cloud-flash 0.1s infinite alternate;
+}
+
+@keyframes cloud-flash {
+    from { filter: brightness(0.4) contrast(1.2) grayscale(0.5); }
+    to { filter: brightness(2.0) contrast(1.5) grayscale(0); }
+}
+
+.lightning-bolt {
+    position: absolute;
+    width: 17.28px;
+    height: 72px;
+    background: linear-gradient(135deg, #ffffff 0%, #a5f3ff 100%);
+    clip-path: polygon(45% 0%, 100% 0%, 55% 45%, 90% 45%, 15% 100%, 45% 55%, 10% 55%);
+    filter: drop-shadow(0 0 15px rgba(124, 233, 255, 0.9));
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0; /* Hidden by default */
+    transform-origin: top center;
+}
+
+.lightning-bolt.active {
+    opacity: 1;
+    /* animation: lightning-strike-flicker 0.1s infinite; */
+}
+
+/* 
+@keyframes lightning-strike-flicker {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; filter: drop-shadow(0 0 25px #ffffff); }
+}
+*/
+
 
