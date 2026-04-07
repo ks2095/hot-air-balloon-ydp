@@ -422,7 +422,8 @@ async function preloadSounds() {
         { name: 'popcorn', url: '팝콘소리.MP3' },
         { name: 'hit', url: '히트.MP3' },
         { name: 'bird_hit', url: '새충돌소리.MP3' },
-        { name: 'thunder', url: '천둥소리.MP3' }
+        { name: 'thunder', url: '천둥소리.MP3' },
+        { name: 'eagle_fall', url: '독수리추락.MP3' }
     ];
     // Parallel decode-into-memory
     await Promise.all(effects.map(effect => soundMgr.loadSound(effect.name, effect.url)));
@@ -3580,17 +3581,36 @@ function updateCloudPosition() {
             bolt.el.style.bottom = `calc(8.05% + ${bolt.y * 0.9195}%)`;
             bolt.el.style.transform = 'translate(-50%, 0)';
 
-            const boltHalfWPct = (17.28 / 2) / gameContainer.clientWidth * 100;
-            const boltHPct = (72 / (gameContainer.clientHeight * 0.9195)) * 100;
-            const boltLeft = bolt.x - boltHalfWPct;
-            const boltRight = bolt.x + boltHalfWPct;
-            const boltBottom = bolt.y;
-            const boltTop = bolt.y + boltHPct;
+            // --- 정밀한 원-직사각형(Circle-AABB) 충돌 판정 ---
+            const skyH = gameContainer.clientHeight * 0.9195;
+            const gameW = gameContainer.clientWidth;
+            
+            // 1. 파란색 원(열기구 본체) 정보 - 픽셀 환산
+            const markerR = 32.5 / 2;
+            const markerX_px = (balloonX / 100) * gameW;
+            const markerY_px = ((balloonY + getMarkerOffset()) / 100) * skyH;
+            
+            // 2. 번개 흰색 본체 정보 - 픽셀 환산 (17.28px x 72px)
+            const boltW_px = 17.28;
+            const boltH_px = 72;
+            const boltX_px = (bolt.x / 100) * gameW;
+            const boltY_px = (bolt.y / 100) * skyH;
+            
+            const rectL = boltX_px - (boltW_px / 2);
+            const rectR = boltX_px + (boltW_px / 2);
+            const rectB = boltY_px;
+            const rectT = boltY_px + boltH_px;
+            
+            // 3. 원의 중심에서 직사각형까지의 가장 가까운 지점 찾기
+            const closestX = Math.max(rectL, Math.min(markerX_px, rectR));
+            const closestY = Math.max(rectB, Math.min(markerY_px, rectT));
+            
+            // 4. 거리의 제곱이 반지름의 제곱보다 작으면 충돌
+            const dx = markerX_px - closestX;
+            const dy = markerY_px - closestY;
+            const distSq = (dx * dx) + (dy * dy);
 
-            // 1. 열기구 충돌 판정
-            const balloonBodyY = balloonY + getMarkerOffset();
-            if (balloonX > boltLeft - 2 && balloonX < boltRight + 2 && 
-                balloonBodyY > boltBottom && balloonBodyY < boltTop) {
+            if (distSq < (markerR * markerR)) {
                 gameOver('CRASH');
                 bolt.el.remove();
                 activeLightningBolts.splice(i, 1);
@@ -3599,15 +3619,23 @@ function updateCloudPosition() {
 
             // 2. 독수리 충돌 판정 (독수리에 맞으면 번개 제거)
             let isBoltRemoved = false;
+            // 독수리는 기존의 퍼센트 기반 판정을 유지하되, 번개 범위를 정밀하게 계산
+            const bL = (rectL / gameW) * 100;
+            const bR = (rectR / gameW) * 100;
+            const bB = (rectB / skyH) * 100;
+            const bT = (rectT / skyH) * 100;
+
             for (let j = activeEagles.length - 1; j >= 0; j--) {
                 const eagle = activeEagles[j];
                 if (eagle.isHit) continue;
-                if (eagle.x > boltLeft - 3 && eagle.x < boltRight + 3 &&
-                    eagle.y > boltBottom && eagle.y < boltTop) {
+                // 기존 판정 범위 (-3 ~ +3) 유지
+                if (eagle.x > bL - 3 && eagle.x < bR + 3 &&
+                    eagle.y > bB && eagle.y < bT) {
                     eagle.isHit = true;
                     eagle.velY = -0.8; 
                     if (eagle.el) eagle.el.classList.add('hit-effect');
                     isBoltRemoved = true;
+                    soundMgr.play('eagle_fall', false, 0.8);
                     break;
                 }
             }
