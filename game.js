@@ -3542,14 +3542,8 @@ function updateCloudPosition() {
                 lightningTimer = 3000; // 3초간 번쩍임
                 clouds.forEach(c => c.classList.add('flashing'));
                 
-                // 천둥소리 재생 (안전하게 재개 후 재생)
-                if (soundMgr.context && soundMgr.context.state === 'suspended') {
-                    soundMgr.resume().then(() => {
-                        soundMgr.play('thunder', false, 1.0);
-                    });
-                } else {
-                    soundMgr.play('thunder', false, 1.0);
-                }
+                // 구름 번쩍임 시작 연출 (애니메이션)
+                clouds.forEach(c => c.classList.add('flashing'));
             }
         } else if (lightningStrikeState === 'FLASHING') {
             // 구름은 바람대로 그대로 흘러감
@@ -3591,6 +3585,9 @@ function updateCloudPosition() {
                         y: boltStartY,
                         velY: 0.375 
                     });
+
+                    // 번개 생성 직후 천둥소리 재생
+                    soundMgr.play('thunder', false, 1.2); 
 
                     // 번개 생성 직후 다음 5초 주기를 위해 즉시 IDLE 상태로 복귀
                     lightningStrikeState = 'IDLE';
