@@ -726,6 +726,22 @@ const LEVEL_CONFIGS = {
         maxTime: 40,
         platformY: 6.0,
         skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    34: {
+        displayName: "29",
+        winds: [2.0, -2.0, 2.0, -2.0, 2.0, -2.0, 2.0],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
+    },
+    35: {
+        displayName: "30",
+        winds: [2.0, -2.0, 2.0, -2.0, 2.0, -2.0, 2.0],
+        maxGas: 400,
+        maxTime: 40,
+        platformY: 6.0,
+        skyColor: "linear-gradient(to bottom, #0c0c24, #19194d, #2d2d86)"
     }
 };
 
@@ -782,7 +798,7 @@ let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23", "26"];
-const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25", "27", "28"];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25", "27", "28", "29", "30"];
 const BONUS_G3_LEVELS = [];
 const BONUS_G4_LEVELS = [];
 
@@ -1341,14 +1357,16 @@ function startGame() {
     windCycleStartTime = missionStartTime;
     level26CloudX = 50; // 구름 위치 초기화
     
-    // 26, 27, 28레벨용 빗방울 시드 및 현장 비우기 (매 시작마다 동일 패턴 보장)
-    if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) {
-        rainSeed = currentLevel + 777;
+    // 26, 27, 28, 29, 30레벨용 빗방울 시드 및 현장 비우기 (매 시작마다 동일 패턴 보장)
+    if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
+        // 레벨 27, 28, 29, 30은 동일한 패턴(32번 시드) 사용
+        const effectiveSeed = (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? 32 : currentLevel;
+        rainSeed = effectiveSeed + 777;
         activeRaindrops.forEach(drop => { if (drop.el && drop.el.parentNode) drop.el.remove(); });
         activeRaindrops.length = 0;
         
-        // 28레벨 전용 번개 시퀀스 초기화 (시작 버튼 누른 시점부터 5초 타이머 시작)
-        if (currentLevel === 33) {
+        // 28, 29, 30레벨 전용 번개 시퀀스 초기화 (시작 버튼 누른 시점부터 5초 타이머 시작)
+        if (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
             lightningStrikeState = 'IDLE';
             lightningTimer = 0;
             lastLightningStartTime = Date.now(); 
@@ -2069,7 +2087,7 @@ function updateTargetLine() {
     const config = LEVEL_CONFIGS[currentLevel];
     if (!config) return;
 
-    if (currentLevel >= 0 && currentLevel <= 33) {
+    if (currentLevel >= 0 && currentLevel <= 35) {
         targetLineX = 50;
         targetLineEl.style.left = `${targetLineX}%`;
 
@@ -2121,7 +2139,7 @@ function handleMovement() {
         }
 
         // 26, 27, 28레벨 빗물 페널티: 2초간 버너 작동 중지 및 상승 제한
-        if ((currentLevel === 31 || currentLevel === 32 || currentLevel === 33) && Date.now() < rainPowerReductionEndTime) {
+        if ((currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) && Date.now() < rainPowerReductionEndTime) {
             appliedForce = 0;
             if (velY > 0) velY = 0; // 상승 속도 즉시 차단
         }
@@ -3171,23 +3189,23 @@ function resetGame() {
         clearFish();
     }
 
-    // Level 21, 22, 25, 27: Bird Obstacles
-    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29 || currentLevel === 32) {
+    // Level 21, 22, 25, 27, 30: Bird Obstacles
+    if (currentLevel === 25 || currentLevel === 26 || currentLevel === 29 || currentLevel === 32 || currentLevel === 35) {
         createBirds();
     } else {
         clearBirds();
     }
 
-    // Level 23, 24, 25, 28: Eagle Obstacles
-    if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29 || currentLevel === 33) {
+    // Level 23, 24, 25, 29, 30: Eagle Obstacles
+    if (currentLevel === 27 || currentLevel === 28 || currentLevel === 29 || currentLevel === 34 || currentLevel === 35) {
 
         createEagles();
     } else {
         clearEagles();
     }
 
-    // Level 26, 27, 28: Cloud decoration
-    if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) {
+    // Level 26, 27, 28, 29, 30: Cloud decoration
+    if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
 
 
         addLevel26Cloud();
@@ -3247,8 +3265,8 @@ function addLevel26Cloud() {
         z = 6; // 레벨 26: 7구역
         sizeScale = 0.6; // 크기 60%
         posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6); // 점선 가이드를 1/6구역만큼 추가 하향
-    } else if (currentLevel === 32 || currentLevel === 33) {
-        z = 5; // 레벨 27, 28은 6구역
+    } else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
+        z = 5; // 레벨 27, 28, 29, 30은 6구역
     } else return;
 
     // 1. 필요한 수치 계산 (물리 판정, 점선 가이드, 구름 이미지 모두에 사용)
@@ -3256,7 +3274,7 @@ function addLevel26Cloud() {
     const skyHeight = gameContainer.clientHeight * 0.9195;
     const cloudWidth = 384 * sizeScale;
     const halfWidthPct = (cloudWidth / skyWidth) * 100 / 2;
-    const quarterZonePct = (currentLevel === 32 || currentLevel === 33) ? (zoneHeight / 4) : 0;
+    const quarterZonePct = (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? (zoneHeight / 4) : 0;
 
 
 
@@ -3284,7 +3302,7 @@ function addLevel26Cloud() {
         const cloud = document.createElement('img');
         cloud.src = '구름1.png';
         cloud.className = 'level26-cloud';
-        if (currentLevel === 33) cloud.classList.add('storm-cloud');
+        if (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) cloud.classList.add('storm-cloud');
         cloud.style.position = 'absolute';
         cloud.style.left = '50%';
         cloud.style.bottom = `${cloudBottomY - (100 / 60) - (zoneHeight / 5) + (zoneHeight / 6)}%`; // 구름 이미지는 그대로 유지
@@ -3353,7 +3371,7 @@ function addLevel26Cloud() {
         ].join(" ");
 
         polygon.setAttribute("points", points);
-        if (currentLevel === 32 || currentLevel === 33) {
+        if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
             polygon.setAttribute("fill", "rgba(255, 211, 42, 0.3)"); // 레벨 27, 28 전용 반투명 노란색 채우기
         } else {
             polygon.setAttribute("fill", "none");
@@ -3367,7 +3385,7 @@ function addLevel26Cloud() {
     }
 
     // 4. 레벨 28 전용 번개 상태 초기화
-    if (currentLevel === 33) {
+    if (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
         lightningStrikeState = 'IDLE';
         lightningTimer = 0;
         lastLightningStartTime = Date.now();
@@ -3395,13 +3413,13 @@ function spawnRaindrop() {
     let posShiftPct = 0;
     if (currentLevel === 31) {
         z = 6; sizeScale = 0.6; posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6);
-    } else if (currentLevel === 32 || currentLevel === 33) z = 5;
+    } else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) z = 5;
     else return;
 
     const cloudWidth = 384 * sizeScale;
     const halfWidthPct = (cloudWidth / skyWidth) * 100 / 2;
     const pixelOffsetPct = (35 / skyHeight) * 100;
-    const quarterZonePct = (currentLevel === 32 || currentLevel === 33) ? (zoneHeight / 4) : 0;
+    const quarterZonePct = (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? (zoneHeight / 4) : 0;
     
     // Cloud bottom position logic (matching addLevel26Cloud)
     const baseCloudBottom = z * zoneHeight - 2 + pixelOffsetPct + quarterZonePct + posShiftPct;
@@ -3410,7 +3428,7 @@ function spawnRaindrop() {
     const centerY = baseCloudBottom + baseHeight / 2;
     const startY = centerY - (height * 0.9) / 2; // Spawn from near the bottom edge
 
-    const currentRandom = (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) ? seededRainRandom : Math.random;
+    const currentRandom = (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? seededRainRandom : Math.random;
     const startX = level26CloudX - halfWidthPct + currentRandom() * (halfWidthPct * 2);
 
     const rainEl = document.createElement('div');
@@ -3421,7 +3439,7 @@ function spawnRaindrop() {
         el: rainEl,
         x: startX,
         y: startY,
-        velY: (0.3 + currentRandom() * 0.2) * ((currentLevel === 31 || currentLevel === 32 || currentLevel === 33) ? 0.33 : 1), // 26, 27, 28레벨은 속도 1/3로 감속
+        velY: (0.3 + currentRandom() * 0.2) * ((currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? 0.33 : 1), // 26, 27, 28, 29, 30레벨은 속도 1/3로 감속
         velX: (currentRandom() - 0.5) * 0.05
     });
 }
@@ -3432,7 +3450,7 @@ function updateRain() {
     // 레벨별 빗방울 개수 차등 적용 (26레벨은 100%, 27레벨은 50%)
     if (currentLevel === 31) {
         if (seededRainRandom() > 0.9725) spawnRaindrop(); // 갯수 10% 증가 (0.025 -> 0.0275 확률)
-    } else if (currentLevel === 32 || currentLevel === 33) {
+    } else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
         if (seededRainRandom() > 0.93875) spawnRaindrop(); // 빗방울 개수 30% 추가 감축 (0.0875 -> 0.06125 확률)
     }
 
@@ -3451,7 +3469,7 @@ function updateRain() {
         const skyWidth = gameContainer.clientWidth;
         const skyHeight = gameContainer.clientHeight * 0.9195;
 
-        if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) {
+        if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
             const bodyXPx = (balloonX / 100) * skyWidth;
             const bodyYPx = ((balloonY + getMarkerOffset()) / 100) * skyHeight;
             const bodyRadius = 32.5 / 2;
@@ -3474,7 +3492,7 @@ function updateRain() {
         }
 
         if (gameState === 'PLAY' && isHit) {
-            if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33) {
+            if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
                 showFloatingText("BURNER FAIL", "#ff4d4d");
                 // 빗물 페널티: 2초간 버너 작동 중지
                 rainPowerReductionEndTime = Date.now() + 2000;
@@ -3500,11 +3518,11 @@ function updateRain() {
 
 function updateCloudPosition() {
     if (gameState !== 'PLAY' && gameState !== 'START') return;
-    if (currentLevel < 31 || currentLevel > 33) return;
+    if (currentLevel < 31 || currentLevel > 35) return;
 
     let z = 1;
     if (currentLevel === 31) z = 6;
-    else if (currentLevel === 32 || currentLevel === 33) z = 5;
+    else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) z = 5;
 
     const wind = ZONE_WINDS[z] + tempWindBoosts[z];
     
@@ -3523,8 +3541,8 @@ function updateCloudPosition() {
     const svgGuides = document.querySelectorAll('.level26-cloud-guide-svg');
     svgGuides.forEach(s => s.style.left = `${level26CloudX - 50}%`);
 
-    // --- 레벨 28 전용 번개 시퀀스 처리 ---
-    if (currentLevel === 33 && gameState === 'PLAY') {
+    // --- 레벨 28, 29, 30 전용 번개 시퀀스 처리 ---
+    if ((currentLevel === 33 || currentLevel === 34 || currentLevel === 35) && gameState === 'PLAY') {
         const timeDelta = 16.66; // Loop fixed delta
         const now = Date.now();
         const skyBg = document.getElementById('sky-background');
@@ -3674,6 +3692,32 @@ function updateCloudPosition() {
                 }
             }
 
+            // --- 붉은새 충돌 체크 (레벨 30 전용) ---
+            if (!isBoltRemoved && currentLevel === 35) {
+                for (let j = activeBirds.length - 1; j >= 0; j--) {
+                    const bird = activeBirds[j];
+                    if (bird.isHit) continue;
+                    
+                    const birdX_px = (bird.x / 100) * gameW;
+                    const birdY_px = (bird.y / 100) * skyH + 7.65; // Center Y
+                    const birdR = 5.1;
+                    
+                    const cX = Math.max(rectL, Math.min(birdX_px, rectR));
+                    const cY = Math.max(rectB, Math.min(birdY_px, rectT));
+                    const dX = birdX_px - cX;
+                    const dY = birdY_px - cY;
+                    
+                    if (dX*dX + dY*dY < birdR*birdR) {
+                        bird.isHit = true;
+                        bird.velY = -0.8; // 하강 속도
+                        if (bird.el) bird.el.classList.add('hit-effect');
+                        isBoltRemoved = true;
+                        soundMgr.play('eagle_fall', false, 0.8);
+                        break;
+                    }
+                }
+            }
+
             if (isBoltRemoved) {
                 bolt.el.remove();
                 activeLightningBolts.splice(i, 1);
@@ -3705,7 +3749,7 @@ function isInsideLevel26Cloud(x, y, halfW = 0, halfH = 0) {
         z = 6;
         sizeScale = 0.6;
         posShiftPct = -(zoneHeight * 0.2) - (zoneHeight / 6); // 점선 가이드를 1/6구역만큼 추가 하향
-    } else if (currentLevel === 32 || currentLevel === 33) z = 5;
+    } else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) z = 5;
     else return false;
     const skyWidth = gameContainer.clientWidth;
     const cloudWidth = 384 * sizeScale;
@@ -3715,7 +3759,7 @@ function isInsideLevel26Cloud(x, y, halfW = 0, halfH = 0) {
     // X축 범위 오버랩 체크 (객체의 [x-halfW, x+halfW]와 구름의 [level26CloudX-halfWidthCloud, level26CloudX+halfWidthCloud])
     if (x + halfW < level26CloudX - halfWidthCloud || x - halfW > level26CloudX + halfWidthCloud) return false;
 
-    const quarterZonePct = (currentLevel === 32 || currentLevel === 33) ? (zoneHeight / 4) : 0;
+    const quarterZonePct = (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? (zoneHeight / 4) : 0;
     const skyHeight = gameContainer.clientHeight * 0.9195;
     const cloudOffset = 35;
     const pixelOffsetInGameUnits = (cloudOffset / skyHeight) * 100;
@@ -4383,20 +4427,20 @@ function createBirds() {
         let birdX = Math.random() * 100;
         let birdY = zoneIdx * (110 / 7) + (Math.random() * 10);
 
-        // 레벨 21, 25, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
-        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 1) {
+        // 레벨 21, 25, 30, 2구역(zoneIdx 1) 붉은새 커스텀 (우측 벽면 중앙 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 35) && zoneIdx === 1) {
             birdVelX = -0.4; 
             birdX = 100; 
             birdY = (zoneIdx + 0.5) * (100 / 7);
         }
-        // 레벨 21, 25, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
-        if ((currentLevel === 25 || currentLevel === 29) && (zoneIdx === 2 || zoneIdx === 3)) {
+        // 레벨 21, 25, 30, 3~4구역(zoneIdx 2, 3) 붉은새 커스텀 (좌측 하단 출발, 속도 0.4)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 35) && (zoneIdx === 2 || zoneIdx === 3)) {
             birdVelX = 0.4; 
             birdX = 0; 
             birdY = zoneIdx * (100 / 7);
         }
-        // 레벨 21, 25, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
-        if ((currentLevel === 25 || currentLevel === 29) && zoneIdx === 4) {
+        // 레벨 21, 25, 30, 5구역(zoneIdx 4) 붉은새 커스텀 (우측 하단 출발, 속도 0.5)
+        if ((currentLevel === 25 || currentLevel === 29 || currentLevel === 35) && zoneIdx === 4) {
             birdVelX = -0.5; 
             birdX = 100; 
             birdY = zoneIdx * (100 / 7);
@@ -4484,10 +4528,32 @@ function createBirds() {
 }
 
 function updateBirds() {
-    const now = performance.now();
-    activeBirds.forEach(bird => {
+    for (let i = activeBirds.length - 1; i >= 0; i--) {
+        const bird = activeBirds[i];
         const skyHeight = gameContainer.clientHeight * 0.9195;
         const skyWidth = gameContainer.clientWidth;
+
+        if (bird.isHit) {
+            // 번개 맞고 추락하는 상태
+            bird.y += bird.velY; // velY는 음수 (-0.8)
+            
+            if (!bird.currentRotation) bird.currentRotation = 0;
+            if (bird.currentRotation < 540) bird.currentRotation += 15;
+            else bird.currentRotation = 540;
+            
+            if (bird.el) bird.el.style.zIndex = '9';
+            const flip = bird.velX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
+            bird.el.style.left = `${bird.x}%`;
+            bird.el.style.bottom = `calc(8.05% + ${bird.y * 0.9195}%)`;
+            bird.el.style.transform = `translateX(-50%) ${flip} rotate(${bird.currentRotation}deg)`;
+            
+            if (bird.y < 2) {
+                if (bird.el && bird.el.parentNode) bird.el.remove();
+                activeBirds.splice(i, 1);
+            }
+            continue;
+        }
+
         let velMultiplier = 1.0;
         const birdHalfW = (21.3 / 2 / skyWidth) * 100;
         const birdHalfH = (15.3 / 2 / skyHeight) * 100;
@@ -4505,7 +4571,7 @@ function updateBirds() {
         // Face movement direction
         const flip = bird.velX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
         bird.el.style.transform = `translateX(-50%) ${flip}`;
-    });
+    }
 }
 
 function clearBirds() {
@@ -4699,6 +4765,7 @@ function checkBirdCollisions() {
     const basketRadius = 7.8 / 2;
 
     activeBirds.forEach(bird => {
+        if (bird.isHit) return; // 추락 중인 새와는 충돌 무시
         const birdXPx = (bird.x / 100) * skyWidth;
         // Bird collision point is roughly at its center (height is 15.3px)
         const birdYPx = (bird.y / 100) * skyHeight + 7.65;
@@ -4720,7 +4787,7 @@ function checkBirdCollisions() {
         if (distBodySq < combinedBodyRadiusSq || distBasketSq < combinedBasketRadiusSq) {
             // 21, 22, 25, 27레벨 등에서는 즉시 폭발
             const config = LEVEL_CONFIGS[currentLevel];
-            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25" || config.displayName === "27" || config.displayName === "28")) {
+            if (config && (config.displayName === "21" || config.displayName === "22" || config.displayName === "25" || config.displayName === "27" || config.displayName === "28" || config.displayName === "30")) {
                 gameOver('CRASH');
                 return;
             }
@@ -4755,12 +4822,13 @@ function createEagles() {
     const isLevel23 = config && config.displayName === "23";
     const isLevel24 = config && config.displayName === "24";
     const isLevel25 = config && config.displayName === "25";
-    const isLevel28 = config && config.displayName === "28";
-    const isSpecialPatternLevel = isLevel23 || isLevel24 || isLevel25 || isLevel28;
+    const isLevel29 = config && config.displayName === "29";
+    const isLevel30 = config && config.displayName === "30";
+    const isSpecialPatternLevel = isLevel23 || isLevel24 || isLevel25 || isLevel29 || isLevel30;
 
 
-    // 23, 24, 25, 28레벨은 4마리 배치, 그 외 레벨은 1마리
-    const eagleCount = (isLevel23 || isLevel24 || isLevel25 || isLevel28) ? 4 : 1;
+    // 23, 24, 25, 29, 30레벨은 4마리 배치, 그 외 레벨은 1마리
+    const eagleCount = (isLevel23 || isLevel24 || isLevel25 || isLevel29 || isLevel30) ? 4 : 1;
 
     for (let i = 0; i < eagleCount; i++) {
         const eagleWrap = document.createElement('div');
@@ -4857,7 +4925,7 @@ function createEagles() {
             lastDirChangeTime: now,
             width: 72,
             height: 48,
-            isLevel23: isSpecialPatternLevel
+            isSpecialPattern: isSpecialPatternLevel
         };
         
         // 초기 위치 및 반전 즉시 반영
@@ -4871,9 +4939,9 @@ function createEagles() {
 }
 
 function updateEagles() {
-    // 스타트를 누를 때만 움직이도록 설정 (23, 24, 25, 28레벨은 대기화면에서도 움직이게 수정)
+    // 스타트를 누를 때만 움직이도록 설정 (23, 24, 25, 29, 30레벨은 대기화면에서도 움직이게 수정)
     const config = LEVEL_CONFIGS[currentLevel];
-    const isSpecialEagleLevel = config && ["23", "24", "25", "28"].includes(config.displayName);
+    const isSpecialEagleLevel = config && ["23", "24", "25", "29", "30"].includes(config.displayName);
     if (gameState !== 'PLAY' && !(gameState === 'START' && isSpecialEagleLevel)) return;
     
     const now = performance.now();
@@ -4908,7 +4976,7 @@ function updateEagles() {
             continue;
         }
 
-        if (!eagle.isLevel23) {
+        if (!eagle.isSpecialPattern) {
             // 기존 일반 독수리: 3초마다 방향 무작위 전환
             if (now - eagle.lastDirChangeTime > 3000) {
                 eagle.velX *= -1;
