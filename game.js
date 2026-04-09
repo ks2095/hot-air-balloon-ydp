@@ -798,8 +798,8 @@ let stunEndTime = 0; // 스턴 종료 시간
 
 // 보너스 점수 레벨 그룹 (표시 이름 기준)
 const BONUS_G1_LEVELS = ["6", "7", "14", "15", "23", "26"];
-const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25", "27", "28", "29", "30"];
-const BONUS_G3_LEVELS = [];
+const BONUS_G2_LEVELS = ["8", "9", "10", "16", "17", "18", "19", "20", "24", "25", "27", "29", "30"];
+const BONUS_G3_LEVELS = ["28"];
 const BONUS_G4_LEVELS = [];
 
 
@@ -2002,8 +2002,8 @@ function update(timestamp) {
     balloon.style.left = `${balloonX}%`;
 
     if (isBurning) {
-        // 26, 27레벨 빗물 페널티 시에는 불꽃이 나오지 않도록 처리
-        if ((currentLevel === 31 || currentLevel === 32) && Date.now() < rainPowerReductionEndTime) {
+        // 26~30레벨 빗물 페널티 시에는 불꽃이 나오지 않도록 처리
+        if ((currentLevel >= 31 && currentLevel <= 35) && Date.now() < rainPowerReductionEndTime) {
             balloon.classList.remove('burning');
         } else {
             balloon.classList.add('burning');
@@ -3451,7 +3451,15 @@ function updateRain() {
     if (currentLevel === 31) {
         if (seededRainRandom() > 0.9725) spawnRaindrop(); // 갯수 10% 증가 (0.025 -> 0.0275 확률)
     } else if (currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
-        if (seededRainRandom() > 0.93875) spawnRaindrop(); // 빗방울 개수 30% 추가 감축 (0.0875 -> 0.06125 확률)
+        let threshold = 0.93875; // 기본 확률 (0.06125)
+        if (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
+            const elapsed = (Date.now() - missionStartTime) / 1000;
+            if (elapsed > 20) {
+                // 20초 경과 시 빗방울 발생 확률 절반으로 감소 (0.06125 -> 0.030625)
+                threshold = 1 - (1 - 0.93875) / 2; // 약 0.969375
+            }
+        }
+        if (seededRainRandom() > threshold) spawnRaindrop();
     }
 
     const skyHeight = gameContainer.clientHeight * 0.9195;
@@ -3494,8 +3502,8 @@ function updateRain() {
         if (gameState === 'PLAY' && isHit) {
             if (currentLevel === 31 || currentLevel === 32 || currentLevel === 33 || currentLevel === 34 || currentLevel === 35) {
                 showFloatingText("BURNER FAIL", "#ff4d4d");
-                // 빗물 페널티: 2초간 버너 작동 중지
-                rainPowerReductionEndTime = Date.now() + 2000;
+                // 빗물 페널티: 1.4초간 버너 작동 중지
+                rainPowerReductionEndTime = Date.now() + 1400;
             } else {
                 gas = Math.max(0, gas - 3);
                 showFloatingText("-3 GAS", "#ff4d4d");
@@ -3554,8 +3562,9 @@ function updateCloudPosition() {
         const currentWind = (ZONE_WINDS[balloonZoneIndex] || 0) + (tempWindBoosts[balloonZoneIndex] || 0);
 
         if (lightningStrikeState === 'IDLE') {
-            // 정확히 5초 주기로 번개 시퀀스 시작 (2s IDLE + 3s FLASHING = 5s)
-            if (now - lastLightningStartTime > 2000) {
+            // 레벨 28은 7초(4s IDLE + 3s FLASHING), 나머지는 5초 주기로 번개 시퀀스 시작
+            const idleLimit = (currentLevel === 33 || currentLevel === 34 || currentLevel === 35) ? 4000 : 2000;
+            if (now - lastLightningStartTime > idleLimit) {
                 lightningStrikeState = 'FLASHING';
                 lightningTimer = 3000; // 3초간 번쩍임
                 clouds.forEach(c => c.classList.add('flashing'));
@@ -3579,11 +3588,8 @@ function updateCloudPosition() {
                     boltEl.style.position = 'absolute';
                     boltEl.style.width = '17.28px'; // 34.56 * 0.5
                     boltEl.style.height = '72px';  // 144 * 0.5
-                    boltEl.style.backgroundImage = "url('번개.png')";
-                    boltEl.style.backgroundColor = 'white'; // 이미지 로드 실패 대비 배경색 (흰색)
-                    boltEl.style.boxShadow = '0 0 10px rgba(255,255,255,0.8)'; // 시각적 가시성 보정
-                    boltEl.style.backgroundSize = 'contain';
-                    boltEl.style.backgroundRepeat = 'no-repeat';
+                    boltEl.style.backgroundColor = '#ffff00'; // Fallback yellow
+                    boltEl.style.filter = 'drop-shadow(0 0 20px #ffff00)'; // Fallback glow
                     boltEl.style.zIndex = '500'; // 구름(14) 및 다른 요소보다 높게 설정
                     gameContainer.appendChild(boltEl);
                     
@@ -3599,10 +3605,10 @@ function updateCloudPosition() {
                         el: boltEl,
                         x: strikeX,
                         y: boltStartY,
-                        velY: 0.375 
+                        velY: 0.3375 
                     });
 
-                    // 번개 생성 직후 다음 5초 주기를 위해 즉시 IDLE 상태로 복귀
+                    // 번개 생성 직후 다음 주기를 위해 즉시 IDLE 상태로 복귀
                     lightningStrikeState = 'IDLE';
                     lastLightningStartTime = Date.now();
                 }
